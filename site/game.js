@@ -1,0 +1,429 @@
+(() => {
+'use strict';
+// ---------- Tunables ----------
+const CONFIG = {
+  timeLimit: 120,        // seconds per level
+  gaugeMax: 6,
+  vatMax: 10,
+  mopRelief: 3,
+  continueCost: 100,
+  levelCoins: 10,
+  coinPickup: 10,
+  powerRate: 0.01,       // power-ups per second (mop + rainbow combined)
+  coinRate: 0.006,       // coin icons per second
+  gravity: 1100,
+  vipFromLevel: 8,
+  vipChance: 0.1,
+  vipMultiplier: 3,
+  sizeWeights: [22, 20, 18, 16, 13, 11], // vial sizes 1..6
+};
+
+// ---------- Layout ----------
+const W = 360, H = 700;
+const TRACK_Y = 95, VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
+const VAT_X = [70, 180, 290];
+const BELT_Y = 520;
+const SLOT_X = [60, 180, 300];
+const COLORS = [
+  { name: 'red', hex: '#e5383b', pat: 'stripes' },
+  { name: 'yellow', hex: '#ffd60a', pat: 'dots' },
+  { name: 'blue', hex: '#3a86ff', pat: 'waves' },
+];
+
+// ---------- Helpers ----------
+const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+const sum = a => a.reduce((x, y) => x + y, 0);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = randInt(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const $ = id => document.getElementById(id);
+const canvas = $('c'), ctx = canvas.getContext('2d'), overlay = $('overlay');
+
+// ---------- Save ----------
+const KEY = 'drinkDilemma.v1';
+let save = { coins: 0, sound: true, run: null };
+try { Object.assign(save, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) {}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
+
+// ---------- Sound ----------
+let actx = null;
+function beep(freq, dur = 0.08, type = 'sine', vol = 0.05) {
+  if (!save.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq; g.gain.value = vol;
+    o.connect(g); g.connect(actx.destination);
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.stop(actx.currentTime + dur);
+  } catch (e) {}
+}
+
+// ---------- State ----------
+let S = null; // game state; null in menus
+function freshRun() { return { level: 1, vats: [0, 0, 0], gauge: 0, score: 0 }; }
+
+function startLevel(run) {
+  S = {
+    level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score,
+    snap: { level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score },
+    timeLeft: CONFIG.timeLimit, need: 3 + run.level, served: 0, spawned: 0,
+    customers: [], vials: [], drinks: [], fx: [], spawnT: 1, custT: 0.5, over: false, t: 0,
+  };
+  overlay.hidden = true;
+}
+
+// ---------- Orders ----------
+function genOrder(L) {
+  const o = [0, 0, 0];
+  const single = Math.min(6, 3 + Math.floor((L - 1) / 2));
+  if (L >= 5 && Math.random() < 0.5) {
+    const n = (L >= 10 && Math.random() < 0.5) ? 3 : 2;
+    const cols = shuffle([0, 1, 2]).slice(0, n);
+    const cap = Math.min(6, Math.max(2, Math.floor(L / 2)));
+    do { o.fill(0); cols.forEach(c => o[c] = randInt(1, cap)); } while (sum(o) < 3);
+  } else {
+    o[randInt(0, 2)] = randInt(3, single);
+  }
+  return o;
+}
+function recipeCode(o) { return o[0] * 49 + o[1] * 7 + o[2]; }
+function points(c) { return sum(c.order.map(n => n > 0 ? 1 : 0)) * sum(c.order) * 5 * (c.vip ? CONFIG.vipMultiplier : 1); }
+const canServe = o => o.every((n, i) => S.vats[i] >= n);
+
+// ---------- Spawning ----------
+function spawnCustomer(vip) {
+  const used = new Set(S.customers.map(c => c.slot));
+  const slot = [0, 1, 2].find(i => !used.has(i));
+  if (slot === undefined) return false;
+  const order = vip ? [randInt(4, 6), randInt(4, 6), randInt(4, 6)] : genOrder(S.level);
+  S.customers.push({ slot, order, vip, state: 'wait', t: 0, drop: 0 });
+  if (!vip) S.spawned++;
+  return true;
+}
+
+function spawnVial(kind, color) {
+  const fromLeft = color === 0 ? false : color === 2 ? true : Math.random() < 0.5;
+  const speedUp = Math.min(2, 1 + 0.05 * (S.level - 1));
+  const speed = rand(70, 150) * speedUp;
+  const v = { kind, color, x: fromLeft ? -20 : W + 20, y: TRACK_Y, vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
+  if (kind === 'vial') {
+    let r = Math.random() * sum(CONFIG.sizeWeights), i = 0;
+    while (r > CONFIG.sizeWeights[i]) { r -= CONFIG.sizeWeights[i]; i++; }
+    v.size = i + 1;
+  }
+  S.vials.push(v);
+}
+const vialH = v => v.kind === 'vial' ? 14 + v.size * 6 : 34;
+
+// ---------- Rules ----------
+function addOverflow(n = 1, x = W / 2, y = 300) {
+  S.gauge += n; beep(160, 0.15, 'square');
+  S.fx.push({ t: 0, x, y, text: '+' + n + ' overflow', col: '#ff6b6b' });
+  if (S.gauge >= CONFIG.gaugeMax) endGame('Overflow!');
+}
+
+function land(v, i) {
+  const x = VAT_X[i];
+  if (v.kind === 'rainbow') {
+    S.vats[i] = CONFIG.vatMax; beep(880, 0.2, 'triangle');
+    S.fx.push({ t: 0, x, y: VAT_TOP - 10, text: 'FULL!', col: '#fff' });
+  } else if (v.color !== i) {
+    addOverflow(1, x, VAT_TOP - 10); // wrong vat, vial is lost
+  } else {
+    const room = CONFIG.vatMax - S.vats[i];
+    S.vats[i] += Math.min(room, v.size); beep(440 + v.size * 40, 0.07);
+    if (v.size > room) addOverflow(1, x, VAT_TOP - 10);
+  }
+  checkServe();
+}
+
+function checkServe() {
+  let c;
+  while (!S.over && (c = S.customers.find(k => k.state === 'wait' && canServe(k.order)))) {
+    c.order.forEach((n, i) => S.vats[i] -= n);
+    c.state = 'served';
+    S.drinks.push({ c, x: 0, code: recipeCode(c.order), total: sum(c.order) });
+    beep(660, 0.1, 'triangle');
+  }
+}
+
+function levelComplete() {
+  S.over = true;
+  save.coins += CONFIG.levelCoins;
+  save.run = { level: S.level + 1, vats: S.vats.slice(), gauge: S.gauge, score: S.score };
+  persist();
+  beep(784, 0.25, 'triangle');
+  show(`<h1>Level ${S.level} complete!</h1><p>+${CONFIG.levelCoins} coins &nbsp;|&nbsp; ${save.coins} total</p>`,
+    [['Next level', () => startLevel(save.run)], ['Main menu', menu, 'ghost']]);
+}
+
+function endGame(reason) {
+  if (S.over) return;
+  S.over = true; beep(110, 0.5, 'sawtooth');
+  const snap = S.snap;
+  const can = save.coins >= CONFIG.continueCost;
+  show(`<h1>Game over</h1><p>${reason}</p><p>Coins: ${save.coins}</p>`, [
+    [`Continue level ${snap.level} (${CONFIG.continueCost} coins)`, () => {
+      save.coins -= CONFIG.continueCost; persist(); startLevel(snap);
+    }, '', !can],
+    ['Restart from level 1', () => { save.run = null; persist(); startLevel(freshRun()); }],
+    ['Main menu', menu, 'ghost'],
+  ]);
+}
+
+// ---------- UI overlays ----------
+function show(html, buttons) {
+  overlay.innerHTML = html;
+  buttons.forEach(([label, fn, cls, disabled]) => {
+    const b = document.createElement('button');
+    b.textContent = label; if (cls) b.className = cls; b.disabled = !!disabled;
+    b.addEventListener('click', fn); overlay.appendChild(b);
+  });
+  overlay.hidden = false;
+}
+function menu() {
+  S = null;
+  const b = [];
+  if (save.run) b.push([`Continue (level ${save.run.level})`, () => startLevel(save.run)]);
+  b.push(['New game', () => { save.run = null; persist(); startLevel(freshRun()); }, save.run ? 'ghost' : '']);
+  b.push([`Sound: ${save.sound ? 'On' : 'Off'}`, () => { save.sound = !save.sound; persist(); beep(600); menu(); }, 'ghost']);
+  show(`<h1>Drink Dilemma</h1><p>Coins: ${save.coins}</p>`, b);
+}
+
+// ---------- Input ----------
+canvas.addEventListener('pointerdown', e => {
+  if (!S || S.over) return;
+  const r = canvas.getBoundingClientRect();
+  const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
+  let best = null, bd = 40;
+  for (const v of S.vials) {
+    if (v.state !== 'ride') continue;
+    const d = Math.hypot(v.x - px, v.y - py);
+    if (d < bd) { bd = d; best = v; }
+  }
+  if (!best) return;
+  if (best.kind === 'mop') {
+    S.gauge = Math.max(0, S.gauge - CONFIG.mopRelief);
+    S.vials.splice(S.vials.indexOf(best), 1); beep(520, 0.2, 'triangle');
+    S.fx.push({ t: 0, x: best.x, y: best.y + 20, text: '-3 overflow', col: '#7CFC9A' });
+  } else if (best.kind === 'coin') {
+    save.coins += CONFIG.coinPickup; persist();
+    S.vials.splice(S.vials.indexOf(best), 1); beep(1000, 0.1, 'triangle');
+    S.fx.push({ t: 0, x: best.x, y: best.y + 20, text: '+' + CONFIG.coinPickup + ' coins', col: '#ffd60a' });
+  } else {
+    best.state = 'fall'; beep(300, 0.04);
+  }
+});
+
+// ---------- Update ----------
+function update(dt) {
+  S.t += dt;
+  S.timeLeft -= dt;
+  if (S.timeLeft <= 0) { S.timeLeft = 0; return endGame("Time's up!"); }
+
+  // customers
+  const maxAtOnce = Math.min(3, 2 + Math.floor(S.level / 4));
+  const active = S.customers.filter(c => !c.vip && c.state !== 'gone').length;
+  S.custT -= dt;
+  if (S.custT <= 0 && S.spawned < S.need && active < maxAtOnce) {
+    spawnCustomer(false); S.custT = rand(0.5, 2);
+    if (S.level >= CONFIG.vipFromLevel && Math.random() < CONFIG.vipChance && !S.customers.some(c => c.vip)) spawnCustomer(true);
+  }
+
+  // vial spawning
+  S.spawnT -= dt;
+  if (S.spawnT <= 0) {
+    spawnVial('vial', randInt(0, 2));
+    S.spawnT = rand(0.8, 1.5) / (1 + 0.04 * (S.level - 1));
+  }
+  if (Math.random() < CONFIG.powerRate * dt) spawnVial(Math.random() < 0.5 ? 'mop' : 'rainbow', 1);
+  if (Math.random() < CONFIG.coinRate * dt) spawnVial('coin', 1);
+
+  // vials
+  for (const v of S.vials.slice()) {
+    v.spin += dt * 4;
+    if (v.state === 'ride') {
+      v.x += v.vx * dt;
+      if (v.x < -40 || v.x > W + 40) S.vials.splice(S.vials.indexOf(v), 1);
+    } else {
+      v.vy += CONFIG.gravity * dt; v.x += v.vx * dt; v.y += v.vy * dt;
+      if (v.y + vialH(v) / 2 >= VAT_TOP) {
+        const i = VAT_X.findIndex(x => Math.abs(v.x - x) <= VAT_W / 2);
+        if (i >= 0) { S.vials.splice(S.vials.indexOf(v), 1); land(v, i); }
+        else if (v.y >= VAT_BOT - 10) {
+          S.vials.splice(S.vials.indexOf(v), 1);
+          addOverflow(v.kind === 'rainbow' ? 2 : 1, v.x, VAT_BOT - 20);
+        }
+        if (S.over) return;
+      }
+    }
+  }
+
+  // drinks sliding along the belt
+  for (const d of S.drinks.slice()) {
+    d.x += 240 * dt;
+    if (d.x >= SLOT_X[d.c.slot]) {
+      S.drinks.splice(S.drinks.indexOf(d), 1);
+      d.c.state = 'leaving';
+      const p = points(d.c); S.score += p;
+      if (!d.c.vip) S.served++;
+      S.fx.push({ t: 0, x: SLOT_X[d.c.slot], y: 560, text: '+' + p, col: '#fff' });
+    }
+  }
+  for (const c of S.customers.slice()) {
+    if (c.state === 'leaving') { c.drop += dt * 160; if (c.drop > 120) S.customers.splice(S.customers.indexOf(c), 1); }
+  }
+  S.fx.forEach(f => f.t += dt); S.fx = S.fx.filter(f => f.t < 1);
+
+  if (S.served >= S.need && S.drinks.length === 0) levelComplete();
+}
+
+// ---------- Drawing ----------
+function pattern(kind, x, y, w, h, col = 'rgba(0,0,0,.35)') {
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2;
+  if (kind === 'stripes') {
+    for (let i = -h; i < w; i += 8) { ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke(); }
+  } else if (kind === 'dots') {
+    for (let r = 0, j = y + 4; j < y + h; j += 9, r++)
+      for (let i = x + 4 + (r % 2 ? 4.5 : 0); i < x + w; i += 9) { ctx.beginPath(); ctx.arc(i, j, 1.8, 0, 7); ctx.fill(); }
+  } else if (kind === 'waves') {
+    for (let j = y + 5; j < y + h; j += 9) {
+      ctx.beginPath();
+      for (let i = 0; i <= w; i += 3) { const yy = j + Math.sin(i / 4) * 2.5; i ? ctx.lineTo(x + i, yy) : ctx.moveTo(x, yy); }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function text(s, x, y, size = 14, col = '#fff', align = 'center') {
+  ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y);
+}
+
+function drawVial(v) {
+  const h = vialH(v), w = 26, x = v.x - w / 2, y = v.y - h / 2;
+  if (v.kind === 'coin') {
+    ctx.fillStyle = '#ffd60a'; ctx.beginPath(); ctx.arc(v.x, v.y, 16, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 3; ctx.stroke(); text('$', v.x, v.y + 1, 18, '#7a5c00'); return;
+  }
+  if (v.kind === 'mop') {
+    ctx.strokeStyle = '#8b5a2b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(v.x + 8, v.y - 18); ctx.lineTo(v.x - 6, v.y + 8); ctx.stroke();
+    ctx.fillStyle = '#cbd5e1'; rr(v.x - 18, v.y + 4, 24, 14, 4); ctx.fill(); text('MOP', v.x - 6, v.y + 11, 8, '#334155'); return;
+  }
+  const hue = (S.t * 200) % 360;
+  ctx.fillStyle = v.kind === 'rainbow' ? `hsl(${hue},90%,55%)` : COLORS[v.color].hex;
+  rr(x, y, w, h, 8); ctx.fill();
+  ctx.save(); rr(x, y, w, h, 8); ctx.clip();
+  if (v.kind === 'vial') pattern(COLORS[v.color].pat, x, y, w, h);
+  ctx.restore();
+  ctx.strokeStyle = v.kind === 'rainbow' ? '#fff' : 'rgba(255,255,255,.8)'; ctx.lineWidth = 2; rr(x, y, w, h, 8); ctx.stroke();
+  text(v.kind === 'rainbow' ? '★' : v.size, v.x, v.y + 1, 14, '#111');
+}
+
+function drawDrink(x, y, code, total, scale = 1) {
+  const hue = (code * 137.508) % 360, shape = (code * 2654435761 >>> 0) % 4;
+  const s = (0.6 + total / 18 * 0.6) * scale;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = `hsl(${hue},75%,55%)`; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (shape === 0) { ctx.moveTo(-10, -12); ctx.lineTo(10, -12); ctx.lineTo(7, 12); ctx.lineTo(-7, 12); }
+  else if (shape === 1) { ctx.rect(-6, -16, 12, 32); }
+  else if (shape === 2) { ctx.moveTo(-13, -8); ctx.lineTo(13, -8); ctx.quadraticCurveTo(13, 12, 0, 12); ctx.quadraticCurveTo(-13, 12, -13, -8); }
+  else { ctx.rect(-5, -4, 10, 18); ctx.rect(-2.5, -16, 5, 12); }
+  ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
+function drawOrder(c, x, y) {
+  const bw = 108, bh = 80, left = x - bw / 2;
+  ctx.fillStyle = '#fff'; rr(left, y, bw, bh, 12); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 8, y + bh); ctx.lineTo(x, y + bh + 10); ctx.lineTo(x + 8, y + bh); ctx.fill();
+  if (c.vip) { ctx.strokeStyle = '#ffd60a'; ctx.lineWidth = 3; rr(left, y, bw, bh, 12); ctx.stroke(); text('♛ VIP', left + 4, y + 8, 11, '#b8860b', 'left'); }
+  drawDrink(x + (c.vip ? 30 : 0), y + 14, recipeCode(c.order), sum(c.order), 0.9);
+  c.order.forEach((n, i) => {
+    if (!n) return;
+    const bx = left + 11 + i * 29, h = n * 5.5, by = y + bh - 6 - h;
+    ctx.fillStyle = COLORS[i].hex; ctx.fillRect(bx, by, 25, h); pattern(COLORS[i].pat, bx, by, 25, h);
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, 25, h);
+    text(n, bx + 12.5, by - 7, 13, '#111');
+  });
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1b1b2b'; ctx.fillRect(0, 0, W, H);
+  if (!S) return;
+
+  // HUD
+  text(`Lv ${S.level}`, 12, 16, 15, '#fff', 'left');
+  text(`Served ${S.served}/${S.need}`, W / 2, 16, 13, '#cbd5e1');
+  text(`${save.coins} ●`, W - 12, 16, 15, '#ffd60a', 'right');
+  const frac = S.timeLeft / CONFIG.timeLimit;
+  ctx.fillStyle = '#333'; ctx.fillRect(12, 28, W - 24, 8);
+  ctx.fillStyle = frac < 0.2 ? '#ff4d4d' : '#4ade80'; ctx.fillRect(12, 28, (W - 24) * frac, 8);
+  text(`${Math.ceil(S.timeLeft)}s`, W - 14, 46, 10, '#94a3b8', 'right');
+  text(`Score ${S.score}`, 12, 46, 10, '#94a3b8', 'left');
+  for (let i = 0; i < CONFIG.gaugeMax; i++) {
+    ctx.fillStyle = i < S.gauge ? '#ff4d4d' : '#3a3a52';
+    ctx.beginPath(); ctx.arc(W / 2 - 62 + i * 25, 52, 8, 0, 7); ctx.fill();
+  }
+  text('overflow', W / 2, 64, 9, '#94a3b8');
+
+  // track
+  ctx.strokeStyle = '#444466'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, TRACK_Y - 18); ctx.lineTo(W, TRACK_Y - 18); ctx.stroke();
+
+  // vats
+  VAT_X.forEach((x, i) => {
+    const left = x - VAT_W / 2, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.vats[i] / CONFIG.vatMax;
+    ctx.fillStyle = '#2a2a40'; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
+    ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT - fill, VAT_W, fill);
+    pattern(COLORS[i].pat, left, VAT_BOT - fill, VAT_W, fill);
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 3; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
+    text(S.vats[i] + '/' + CONFIG.vatMax, x, VAT_TOP + 14, 14, '#fff');
+  });
+
+  // belt
+  ctx.fillStyle = '#555'; ctx.fillRect(0, BELT_Y, W, 12);
+  ctx.fillStyle = '#777'; for (let i = ((S.t * 40) % 20); i < W; i += 20) ctx.fillRect(i, BELT_Y + 4, 8, 4);
+
+  // customers
+  for (const c of S.customers) {
+    const x = SLOT_X[c.slot], dy = c.drop;
+    if (c.state !== 'leaving') drawOrder(c, x, 540);
+    ctx.fillStyle = c.vip ? '#ffd60a' : '#f4a261'; ctx.beginPath(); ctx.arc(x, 650 + dy, 22, 0, 7); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.fillRect(x - 9, 645 + dy, 4, 4); ctx.fillRect(x + 5, 645 + dy, 4, 4);
+    ctx.fillRect(x - 7, 658 + dy, 14, 3);
+  }
+  for (const d of S.drinks) drawDrink(d.x, BELT_Y - 12, d.code, d.total, 0.9);
+
+  // vials
+  S.vials.forEach(drawVial);
+
+  // fx
+  for (const f of S.fx) { ctx.globalAlpha = 1 - f.t; text(f.text, f.x, f.y - f.t * 30, 14, f.col); }
+  ctx.globalAlpha = 1;
+}
+
+// ---------- Loop / resize ----------
+function resize() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px';
+  canvas.width = W * s * dpr; canvas.height = H * s * dpr;
+  ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
+  $('wrap').style.width = W * s + 'px';
+}
+window.addEventListener('resize', resize); resize();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (S && !S.over) update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+window.__dd = { get S() { return S; }, CONFIG, save };
+menu();
+})();
