@@ -237,6 +237,8 @@ function update(dt) {
     if (S.level >= CONFIG.vipFromLevel && Math.random() < CONFIG.vipChance && !S.customers.some(c => c.vip)) spawnCustomer(true);
   }
 
+  checkServe(); // serve anyone the vats already cover (e.g. on arrival)
+
   // vial spawning
   S.spawnT -= dt;
   if (S.spawnT <= 0) {
