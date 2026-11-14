@@ -20,7 +20,7 @@ const CONFIG = {
 
 // ---------- Layout ----------
 const W = 360, H = 700;
-const TRACK_Y = [105, 170], VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
+const RIM_Y = [78, 146], VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
 const VAT_X = [70, 180, 290];
 const BELT_Y = 520;
 const SLOT_X = [60, 180, 300];
@@ -106,12 +106,13 @@ function spawnVial(kind, color) {
   const fromLeft = color === 0 ? false : color === 2 ? true : Math.random() < 0.5;
   const speedUp = Math.min(2, 1 + 0.05 * (S.level - 1));
   const speed = rand(70, 150) * speedUp;
-  const v = { kind, color, x: fromLeft ? -20 : W + 20, y: TRACK_Y[Math.random() < 0.5 ? 0 : 1], vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
+  const v = { kind, color, x: fromLeft ? -20 : W + 20, y: 0, row: Math.random() < 0.5 ? 0 : 1, vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
   if (kind === 'vial') {
     let r = Math.random() * sum(CONFIG.sizeWeights), i = 0;
     while (r > CONFIG.sizeWeights[i]) { r -= CONFIG.sizeWeights[i]; i++; }
     v.size = i + 1;
   }
+  v.y = RIM_Y[v.row] + vialH(v) / 2; // hangs from the rim
   S.vials.push(v);
 }
 const vialH = v => v.kind === 'vial' ? 22 + v.size * 6 : v.kind === 'rainbow' ? 52 : 34;
@@ -201,17 +202,29 @@ function menu() {
 }
 
 // ---------- Input ----------
+// Is the point on this vial's flask shape (neck + triangular body), with a little finger padding?
+function hits(v, px, py, pad = 7) {
+  if (v.kind === 'coin' || v.kind === 'mop') return Math.hypot(v.x - px, v.y - py) < 30;
+  const w = vialW(v), h = vialH(v), top = v.y - h / 2, nw = Math.max(8, w * 0.3), nh = h * 0.34;
+  const dy = py - top, dx = Math.abs(px - v.x);
+  if (dy < -pad || dy > h + pad) return false;
+  if (dy <= nh) return dx <= nw / 2 + pad;
+  const f = Math.min(1, (dy - nh) / (h - nh));
+  return dx <= nw / 2 + (w / 2 - nw / 2) * f + pad;
+}
 canvas.addEventListener('pointerdown', e => {
   if (!S || S.over) return;
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
-  let best = null, bd = 1e9;
-  for (const v of S.vials) {
-    if (v.state !== 'ride') continue;
-    const d = Math.hypot(v.x - px, v.y - py);
-    if (d >= 40) continue;
-    const score = d + vialRank(v) * 2.5;
-    if (score < bd) { bd = score; best = v; }
+  let best = null;
+  for (const pad of [0, 8]) { // exact shape first (topmost wins); padding only if nothing was hit
+    let bs = 1e9;
+    for (const v of S.vials) {
+      if (v.state !== 'ride' || !hits(v, px, py, pad)) continue;
+      const score = vialRank(v) * 1000 + Math.hypot(v.x - px, v.y - py);
+      if (score < bs) { bs = score; best = v; }
+    }
+    if (best) break;
   }
   if (!best) return;
   if (best.kind === 'mop') {
@@ -343,7 +356,7 @@ function drawVial(v) {
   ctx.restore();
   flaskPath(v.x, v.y, vialW(v), h); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.lineWidth = 3; ctx.strokeStyle = '#000';
-  const label = v.kind === 'rainbow' ? '★' : v.size, ly = v.y + h * 0.2;
+  const label = v.kind === 'rainbow' ? '★' : v.size, ly = v.y + h * 0.3;
   ctx.font = 'bold 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 4; ctx.strokeText(label, v.x, ly);
   text(label, v.x, ly, 15, '#111');
@@ -409,8 +422,8 @@ function draw() {
   text('overflow', W / 2, 64, 9, '#94a3b8');
 
   // track
-  ctx.strokeStyle = '#444466'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 74); ctx.lineTo(W, 74); ctx.stroke();
-  ctx.lineWidth = 1; ctx.strokeStyle = '#2f2f4a'; ctx.beginPath(); ctx.moveTo(0, 137); ctx.lineTo(W, 137); ctx.stroke();
+  ctx.strokeStyle = '#444466'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, RIM_Y[0] - 3); ctx.lineTo(W, RIM_Y[0] - 3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, RIM_Y[1] - 3); ctx.lineTo(W, RIM_Y[1] - 3); ctx.stroke();
 
   // vats
   VAT_X.forEach((x, i) => {
