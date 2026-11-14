@@ -20,7 +20,7 @@ const CONFIG = {
 
 // ---------- Layout ----------
 const W = 360, H = 700;
-const TRACK_Y = 95, VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
+const TRACK_Y = [105, 170], VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
 const VAT_X = [70, 180, 290];
 const BELT_Y = 520;
 const SLOT_X = [60, 180, 300];
@@ -106,7 +106,7 @@ function spawnVial(kind, color) {
   const fromLeft = color === 0 ? false : color === 2 ? true : Math.random() < 0.5;
   const speedUp = Math.min(2, 1 + 0.05 * (S.level - 1));
   const speed = rand(70, 150) * speedUp;
-  const v = { kind, color, x: fromLeft ? -20 : W + 20, y: TRACK_Y, vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
+  const v = { kind, color, x: fromLeft ? -20 : W + 20, y: TRACK_Y[Math.random() < 0.5 ? 0 : 1], vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
   if (kind === 'vial') {
     let r = Math.random() * sum(CONFIG.sizeWeights), i = 0;
     while (r > CONFIG.sizeWeights[i]) { r -= CONFIG.sizeWeights[i]; i++; }
@@ -114,7 +114,10 @@ function spawnVial(kind, color) {
   }
   S.vials.push(v);
 }
-const vialH = v => v.kind === 'vial' ? 14 + v.size * 6 : 34;
+const vialH = v => v.kind === 'vial' ? 22 + v.size * 6 : v.kind === 'rainbow' ? 52 : 34;
+const vialW = v => v.kind === 'vial' ? 22 + v.size * 2.5 : 34;
+// layering: smaller vials sit on top of bigger ones; mop/coin on top of all, rainbow underneath
+const vialRank = v => v.kind === 'vial' ? v.size : v.kind === 'rainbow' ? 7 : 0;
 
 // ---------- Rules ----------
 function addOverflow(n = 1, x = W / 2, y = 300, why = '') {
@@ -202,11 +205,13 @@ canvas.addEventListener('pointerdown', e => {
   if (!S || S.over) return;
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
-  let best = null, bd = 40;
+  let best = null, bd = 1e9;
   for (const v of S.vials) {
     if (v.state !== 'ride') continue;
     const d = Math.hypot(v.x - px, v.y - py);
-    if (d < bd) { bd = d; best = v; }
+    if (d >= 40) continue;
+    const score = d + vialRank(v) * 2.5;
+    if (score < bd) { bd = score; best = v; }
   }
   if (!best) return;
   if (best.kind === 'mop') {
@@ -321,7 +326,7 @@ function text(s, x, y, size = 14, col = '#fff', align = 'center') {
 }
 
 function drawVial(v) {
-  const h = vialH(v), w = 26, x = v.x - w / 2, y = v.y - h / 2;
+  const h = vialH(v), w = vialW(v);
   if (v.kind === 'coin') {
     ctx.fillStyle = '#ffd60a'; ctx.beginPath(); ctx.arc(v.x, v.y, 16, 0, 7); ctx.fill();
     ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 3; ctx.stroke(); text('$', v.x, v.y + 1, 18, '#7a5c00'); return;
@@ -331,18 +336,33 @@ function drawVial(v) {
     ctx.fillStyle = '#cbd5e1'; rr(v.x - 18, v.y + 4, 24, 14, 4); ctx.fill(); text('MOP', v.x - 6, v.y + 11, 8, '#334155'); return;
   }
   const hue = (S.t * 200) % 360;
-  ctx.fillStyle = v.kind === 'rainbow' ? `hsl(${hue},90%,55%)` : COLORS[v.color].hex;
-  rr(x, y, w, h, 8); ctx.fill();
-  ctx.save(); rr(x, y, w, h, 8); ctx.clip();
-  if (v.kind === 'vial') pattern(COLORS[v.color].pat, x, y, w, h);
+  flaskPath(v.x, v.y, vialW(v), h);
+  ctx.fillStyle = v.kind === 'rainbow' ? `hsl(${hue},90%,55%)` : COLORS[v.color].hex; ctx.fill();
+  ctx.save(); flaskPath(v.x, v.y, vialW(v), h); ctx.clip();
+  if (v.kind === 'vial') pattern(COLORS[v.color].pat, v.x - w / 2, v.y - h / 2, w, h);
   ctx.restore();
-  ctx.strokeStyle = v.kind === 'rainbow' ? '#fff' : 'rgba(255,255,255,.8)'; ctx.lineWidth = 2; rr(x, y, w, h, 8); ctx.stroke();
-  text(v.kind === 'rainbow' ? '★' : v.size, v.x, v.y + 1, 14, '#111');
+  flaskPath(v.x, v.y, vialW(v), h); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+  const label = v.kind === 'rainbow' ? '★' : v.size, ly = v.y + h * 0.2;
+  ctx.font = 'bold 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 4; ctx.strokeText(label, v.x, ly);
+  text(label, v.x, ly, 15, '#111');
+}
+
+// Erlenmeyer-style flask: tube neck on a triangular body
+function flaskPath(cx, cy, w, h) {
+  const nw = Math.max(8, w * 0.3), nh = h * 0.34, top = cy - h / 2, bot = cy + h / 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - nw / 2 - 2.5, top); ctx.lineTo(cx + nw / 2 + 2.5, top);
+  ctx.lineTo(cx + nw / 2, top + 3); ctx.lineTo(cx + nw / 2, top + nh);
+  ctx.lineTo(cx + w / 2, bot - 5); ctx.quadraticCurveTo(cx + w / 2, bot, cx + w / 2 - 5, bot);
+  ctx.lineTo(cx - w / 2 + 5, bot); ctx.quadraticCurveTo(cx - w / 2, bot, cx - w / 2, bot - 5);
+  ctx.lineTo(cx - nw / 2, top + nh); ctx.lineTo(cx - nw / 2, top + 3); ctx.closePath();
 }
 
 function drawDrink(x, y, code, total, scale = 1) {
   const hue = (code * 137.508) % 360, shape = (code * 2654435761 >>> 0) % 4;
-  const s = (0.6 + total / 18 * 0.6) * scale;
+  const s = (0.85 + total / 18 * 0.45) * scale;
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
   ctx.fillStyle = `hsl(${hue},75%,55%)`; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
   ctx.beginPath();
@@ -354,11 +374,11 @@ function drawDrink(x, y, code, total, scale = 1) {
 }
 
 function drawOrder(c, x, y) {
-  const bw = 108, bh = 80, left = x - bw / 2;
+  const bw = 108, bh = 96, left = x - bw / 2;
   ctx.fillStyle = '#fff'; rr(left, y, bw, bh, 12); ctx.fill();
   ctx.beginPath(); ctx.moveTo(x - 8, y + bh); ctx.lineTo(x, y + bh + 10); ctx.lineTo(x + 8, y + bh); ctx.fill();
   if (c.vip) { ctx.strokeStyle = '#ffd60a'; ctx.lineWidth = 3; rr(left, y, bw, bh, 12); ctx.stroke(); text('♛ VIP', left + 4, y + 8, 11, '#b8860b', 'left'); }
-  drawDrink(x + (c.vip ? 30 : 0), y + 14, recipeCode(c.order), sum(c.order), 0.9);
+  drawDrink(x + (c.vip ? 26 : 0), y + 24, recipeCode(c.order), sum(c.order), 1.25);
   c.order.forEach((n, i) => {
     if (!n) return;
     const bx = left + 11 + i * 29, h = n * 5.5, by = y + bh - 6 - h;
@@ -389,7 +409,8 @@ function draw() {
   text('overflow', W / 2, 64, 9, '#94a3b8');
 
   // track
-  ctx.strokeStyle = '#444466'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, TRACK_Y - 18); ctx.lineTo(W, TRACK_Y - 18); ctx.stroke();
+  ctx.strokeStyle = '#444466'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 74); ctx.lineTo(W, 74); ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#2f2f4a'; ctx.beginPath(); ctx.moveTo(0, 137); ctx.lineTo(W, 137); ctx.stroke();
 
   // vats
   VAT_X.forEach((x, i) => {
@@ -421,9 +442,9 @@ function draw() {
   for (const c of S.customers) {
     const x = SLOT_X[c.slot], dy = c.drop;
     if (c.state !== 'leaving') drawOrder(c, x, 540);
-    ctx.fillStyle = c.vip ? '#ffd60a' : '#f4a261'; ctx.beginPath(); ctx.arc(x, 650 + dy, 22, 0, 7); ctx.fill();
-    ctx.fillStyle = '#222'; ctx.fillRect(x - 9, 645 + dy, 4, 4); ctx.fillRect(x + 5, 645 + dy, 4, 4);
-    ctx.fillRect(x - 7, 658 + dy, 14, 3);
+    ctx.fillStyle = c.vip ? '#ffd60a' : '#f4a261'; ctx.beginPath(); ctx.arc(x, 664 + dy, 22, 0, 7); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.fillRect(x - 9, 659 + dy, 4, 4); ctx.fillRect(x + 5, 659 + dy, 4, 4);
+    ctx.fillRect(x - 7, 672 + dy, 14, 3);
   }
   for (const d of S.drinks) drawDrink(d.x, BELT_Y - 12, d.code, d.total, 0.9);
 
@@ -432,7 +453,9 @@ function draw() {
   ctx.globalAlpha = 1;
 
   // vials
-  S.vials.forEach(drawVial);
+  const riding = S.vials.filter(v => v.state === 'ride').sort((a, b) => vialRank(b) - vialRank(a));
+  riding.forEach(drawVial);
+  S.vials.filter(v => v.state !== 'ride').forEach(drawVial);
 
   // fx
   for (const f of S.fx) { ctx.globalAlpha = 1 - f.t; text(f.text, f.x, f.y - f.t * 30, 14, f.col); }
