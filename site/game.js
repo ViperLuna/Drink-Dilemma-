@@ -67,6 +67,7 @@ function startLevel(run) {
     level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score,
     snap: { level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score },
     timeLeft: CONFIG.timeLimit, need: 3 + run.level, served: 0, spawned: 0,
+    disp: run.vats.slice(), shake: [0, 0, 0], parts: [],
     customers: [], vials: [], drinks: [], fx: [], spawnT: 1, custT: 0.5, over: false, t: 0,
   };
   overlay.hidden = true;
@@ -116,10 +117,15 @@ function spawnVial(kind, color) {
 const vialH = v => v.kind === 'vial' ? 14 + v.size * 6 : 34;
 
 // ---------- Rules ----------
-function addOverflow(n = 1, x = W / 2, y = 300) {
+function addOverflow(n = 1, x = W / 2, y = 300, why = '') {
   S.gauge += n; beep(160, 0.15, 'square');
-  S.fx.push({ t: 0, x, y, text: '+' + n + ' overflow', col: '#ff6b6b' });
+  S.fx.push({ t: 0, x, y, text: why ? why + ' +' + n : '+' + n + ' overflow', col: '#ff6b6b' });
   if (S.gauge >= CONFIG.gaugeMax) endGame('Overflow!');
+}
+
+function spill(x, y, col, n, spread = 1) {
+  for (let k = 0; k < n; k++)
+    S.parts.push({ x: x + rand(-8, 8), y, vx: rand(-90, 90) * spread, vy: rand(-220, -60), col, t: 0 });
 }
 
 function land(v, i) {
@@ -128,11 +134,12 @@ function land(v, i) {
     S.vats[i] = CONFIG.vatMax; beep(880, 0.2, 'triangle');
     S.fx.push({ t: 0, x, y: VAT_TOP - 10, text: 'FULL!', col: '#fff' });
   } else if (v.color !== i) {
-    addOverflow(1, x, VAT_TOP - 10); // wrong vat, vial is lost
+    S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[v.color].hex, 14);
+    addOverflow(1, x, VAT_TOP - 30, 'wrong color!'); // wrong vat, vial is lost
   } else {
     const room = CONFIG.vatMax - S.vats[i];
     S.vats[i] += Math.min(room, v.size); beep(440 + v.size * 40, 0.07);
-    if (v.size > room) addOverflow(1, x, VAT_TOP - 10);
+    if (v.size > room) { S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[i].hex, 8 + 2 * (v.size - room)); addOverflow(1, x, VAT_TOP - 30, 'overflow!'); }
   }
   checkServe();
 }
@@ -252,12 +259,22 @@ function update(dt) {
         if (i >= 0) { S.vials.splice(S.vials.indexOf(v), 1); land(v, i); }
         else if (v.y >= VAT_BOT - 10) {
           S.vials.splice(S.vials.indexOf(v), 1);
-          addOverflow(v.kind === 'rainbow' ? 2 : 1, v.x, VAT_BOT - 20);
+          spill(v.x, VAT_BOT - 10, v.kind === 'rainbow' ? '#fff' : COLORS[v.color].hex, 10, 1.5);
+          addOverflow(v.kind === 'rainbow' ? 2 : 1, v.x, VAT_BOT - 30, 'missed!');
         }
         if (S.over) return;
       }
     }
   }
+
+  // animate vat levels (fast but visible), shake, spill particles
+  for (let i = 0; i < 3; i++) {
+    const diff = S.vats[i] - S.disp[i], step = 9 * dt;
+    S.disp[i] = Math.abs(diff) <= step ? S.vats[i] : S.disp[i] + Math.sign(diff) * step;
+    S.shake[i] = Math.max(0, S.shake[i] - dt);
+  }
+  for (const q of S.parts) { q.t += dt; q.vy += 900 * dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+  S.parts = S.parts.filter(q => q.t < 0.9 && q.y < VAT_BOT + 4);
 
   // drinks sliding along the belt
   for (const d of S.drinks.slice()) {
@@ -374,21 +391,24 @@ function draw() {
 
   // vats
   VAT_X.forEach((x, i) => {
-    const left = x - VAT_W / 2, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.vats[i] / CONFIG.vatMax;
+    const sh = S.shake[i] > 0 ? Math.sin(S.t * 60) * 4 * (S.shake[i] / 0.4) : 0;
+    const left = x - VAT_W / 2 + sh, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.disp[i] / CONFIG.vatMax;
     ctx.fillStyle = '#2a2a40'; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
     // faint tint + pattern so an empty vat still shows its color
     ctx.globalAlpha = 0.22; ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
     pattern(COLORS[i].pat, left, VAT_TOP, VAT_W, hgt, 'rgba(255,255,255,.5)'); ctx.globalAlpha = 1;
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT - fill, VAT_W, fill);
     pattern(COLORS[i].pat, left, VAT_BOT - fill, VAT_W, fill);
-    ctx.strokeStyle = COLORS[i].hex; ctx.lineWidth = 5; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
+    ctx.strokeStyle = S.shake[i] > 0 ? '#ff4d4d' : COLORS[i].hex; ctx.lineWidth = 5; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(left - 2.5, VAT_TOP - 2.5, VAT_W + 5, hgt + 5);
     // label plate: color + pattern + name + count
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT + 0, VAT_W, 0);
     ctx.fillStyle = '#111'; ctx.fillRect(left + 8, VAT_TOP + 6, VAT_W - 16, 22);
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left + 10, VAT_TOP + 8, 18, 18); pattern(COLORS[i].pat, left + 10, VAT_TOP + 8, 18, 18);
     text(COLORS[i].name.toUpperCase(), left + 32, VAT_TOP + 17, 10, '#fff', 'left');
-    text(S.vats[i] + '/' + CONFIG.vatMax, x, VAT_TOP + 42, 14, '#fff');
+    ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(S.vats[i] + '/' + CONFIG.vatMax, x + sh, VAT_TOP + 42);
+    text(S.vats[i] + '/' + CONFIG.vatMax, x + sh, VAT_TOP + 42, 14, S.vats[i] >= CONFIG.vatMax ? '#ff8a8a' : '#fff');
   });
 
   // belt
@@ -404,6 +424,10 @@ function draw() {
     ctx.fillRect(x - 7, 658 + dy, 14, 3);
   }
   for (const d of S.drinks) drawDrink(d.x, BELT_Y - 12, d.code, d.total, 0.9);
+
+  // spill particles
+  for (const q of S.parts) { ctx.globalAlpha = 1 - q.t / 0.9; ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
 
   // vials
   S.vials.forEach(drawVial);
