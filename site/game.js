@@ -376,10 +376,19 @@ function draw() {
   VAT_X.forEach((x, i) => {
     const left = x - VAT_W / 2, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.vats[i] / CONFIG.vatMax;
     ctx.fillStyle = '#2a2a40'; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
+    // faint tint + pattern so an empty vat still shows its color
+    ctx.globalAlpha = 0.22; ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
+    pattern(COLORS[i].pat, left, VAT_TOP, VAT_W, hgt, 'rgba(255,255,255,.5)'); ctx.globalAlpha = 1;
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT - fill, VAT_W, fill);
     pattern(COLORS[i].pat, left, VAT_BOT - fill, VAT_W, fill);
-    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 3; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
-    text(S.vats[i] + '/' + CONFIG.vatMax, x, VAT_TOP + 14, 14, '#fff');
+    ctx.strokeStyle = COLORS[i].hex; ctx.lineWidth = 5; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(left - 2.5, VAT_TOP - 2.5, VAT_W + 5, hgt + 5);
+    // label plate: color + pattern + name + count
+    ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT + 0, VAT_W, 0);
+    ctx.fillStyle = '#111'; ctx.fillRect(left + 8, VAT_TOP + 6, VAT_W - 16, 22);
+    ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left + 10, VAT_TOP + 8, 18, 18); pattern(COLORS[i].pat, left + 10, VAT_TOP + 8, 18, 18);
+    text(COLORS[i].name.toUpperCase(), left + 32, VAT_TOP + 17, 10, '#fff', 'left');
+    text(S.vats[i] + '/' + CONFIG.vatMax, x, VAT_TOP + 42, 14, '#fff');
   });
 
   // belt
