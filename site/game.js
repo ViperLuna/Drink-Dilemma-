@@ -172,14 +172,11 @@ function endGame(reason) {
   if (S.over) return;
   S.over = true; beep(110, 0.5, 'sawtooth');
   const snap = S.snap;
-  save.run = null; persist(); // dying ends the run; only the paid continue below can bring it back
+  // keep the run on disk, flagged as lost: resuming it (here or from the menu) costs coins
+  save.run = { level: snap.level, vats: snap.vats.slice(), gauge: snap.gauge, score: snap.score, lost: true }; persist();
   const can = save.coins >= CONFIG.continueCost;
   show(`<h1>Game over</h1><p>${reason}</p><p>Coins: ${save.coins}</p>`, [
-    [`Continue level ${snap.level} (${CONFIG.continueCost} coins)`, () => {
-      save.coins -= CONFIG.continueCost;
-      save.run = { level: snap.level, vats: snap.vats.slice(), gauge: snap.gauge, score: snap.score };
-      persist(); startLevel(snap);
-    }, '', !can],
+    [`Continue level ${snap.level} (${CONFIG.continueCost} coins)`, () => payContinue(), '', !can],
     ['Restart from level 1', () => { save.run = null; persist(); startLevel(freshRun()); }],
     ['Main menu', menu, 'ghost'],
   ]);
@@ -195,10 +192,18 @@ function show(html, buttons) {
   });
   overlay.hidden = false;
 }
+function payContinue() {
+  const r = save.run;
+  if (!r || save.coins < CONFIG.continueCost) return;
+  save.coins -= CONFIG.continueCost;
+  save.run = { level: r.level, vats: r.vats.slice(), gauge: r.gauge, score: r.score }; // no longer lost
+  persist(); startLevel(save.run);
+}
 function menu() {
   S = null;
   const b = [];
-  if (save.run) b.push([`Continue (level ${save.run.level})`, () => startLevel(save.run)]);
+  if (save.run && save.run.lost) b.push([`Continue level ${save.run.level} (${CONFIG.continueCost} coins)`, payContinue, '', save.coins < CONFIG.continueCost]);
+  else if (save.run) b.push([`Continue (level ${save.run.level})`, () => startLevel(save.run)]);
   b.push(['New game', () => { save.run = null; persist(); startLevel(freshRun()); }, save.run ? 'ghost' : '']);
   b.push([`Sound: ${save.sound ? 'On' : 'Off'}`, () => { save.sound = !save.sound; persist(); beep(600); menu(); }, 'ghost']);
   show(`<h1>Drink Dilemma</h1><p>Coins: ${save.coins}</p>`, b);
