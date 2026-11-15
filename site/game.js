@@ -15,6 +15,8 @@ const CONFIG = {
   vipFromLevel: 8,
   vipChance: 0.1,
   vipMultiplier: 3,
+  speedRange: [70, 150],       // px/s for red, blue, mop, coin, rainbow
+  yellowSpeedRange: [50, 115], // yellow vials are slower (middle vat, either side)
   sizeWeights: [22, 20, 18, 16, 13, 11], // vial sizes 1..6
 };
 
@@ -105,7 +107,8 @@ function spawnCustomer(vip) {
 function spawnVial(kind, color) {
   const fromLeft = color === 0 ? false : color === 2 ? true : Math.random() < 0.5;
   const speedUp = Math.min(2, 1 + 0.05 * (S.level - 1));
-  const speed = rand(70, 150) * speedUp;
+  const [lo, hi] = kind === 'vial' && color === 1 ? CONFIG.yellowSpeedRange : CONFIG.speedRange;
+  const speed = rand(lo, hi) * speedUp;
   const v = { kind, color, x: fromLeft ? -20 : W + 20, y: 0, row: Math.random() < 0.5 ? 0 : 1, vx: fromLeft ? speed : -speed, vy: 0, state: 'ride', size: 1, spin: Math.random() * 6 };
   if (kind === 'vial') {
     let r = Math.random() * sum(CONFIG.sizeWeights), i = 0;
