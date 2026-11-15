@@ -60,6 +60,24 @@ function beep(freq, dur = 0.08, type = 'sine', vol = 0.05) {
   } catch (e) {}
 }
 
+// Water-drop "fwip": a sine whose pitch rises fast, then fades. Bigger vials sound a bit lower and rounder.
+function plip(ac, dest, t0, size = 1, jitter = Math.random()) {
+  const f0 = (380 - size * 18) * (0.92 + jitter * 0.16), f1 = f0 * 3.2, dur = 0.11 + size * 0.012;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function drop(size) {
+  if (!save.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    plip(actx, actx.destination, actx.currentTime, size);
+  } catch (e) {}
+}
+
 // ---------- State ----------
 let S = null; // game state; null in menus
 function freshRun() { return { level: 1, vats: [0, 0, 0], gauge: 0, score: 0 }; }
@@ -145,7 +163,7 @@ function land(v, i) {
     addOverflow(1, x, VAT_TOP - 30, 'wrong color!'); // wrong vat, vial is lost
   } else {
     const room = CONFIG.vatMax - S.vats[i];
-    S.vats[i] += Math.min(room, v.size); beep(440 + v.size * 40, 0.07);
+    S.vats[i] += Math.min(room, v.size); drop(v.size);
     if (v.size > room) { S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[i].hex, 8 + 2 * (v.size - room)); addOverflow(1, x, VAT_TOP - 30, 'overflow!'); }
   }
   checkServe();
@@ -576,6 +594,6 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx };
+window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx, plip };
 menu();
 })();
