@@ -45,7 +45,7 @@ Marked with a crown, not just a color.
 
 ## Coins
 - 10 coins per level completed. Rare coin icon rides the ceiling: tap for 10.
-- **100 coins** to continue after game over from the start of that level (vats/gauge as they were).
+- **100 coins** to continue after game over from the start of that level (vats as they were, **overflow gauge reset to 0**).
   Otherwise restart from level 1. Coins are permanent and can be stockpiled.
 
 ## Saving and menus

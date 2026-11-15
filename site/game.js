@@ -199,7 +199,7 @@ function payContinue() {
   const r = save.run;
   if (!r || save.coins < CONFIG.continueCost) return;
   save.coins -= CONFIG.continueCost;
-  save.run = { level: r.level, vats: r.vats.slice(), gauge: r.gauge, score: r.score }; // no longer lost
+  save.run = { level: r.level, vats: r.vats.slice(), gauge: 0, score: r.score }; // no longer lost; a paid continue clears the overflow gauge
   persist(); startLevel(save.run);
 }
 function menu() {
