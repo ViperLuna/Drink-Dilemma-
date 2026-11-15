@@ -16,7 +16,7 @@ const CONFIG = {
   vipChance: 0.1,
   vipMultiplier: 3,
   speedRange: [70, 150],       // px/s for red, blue, mop, coin, rainbow
-  yellowSpeedRange: [50, 115], // yellow vials are slower (middle vat, either side)
+  yellowSpeedRange: [45, 97],   // ~65% of the others: yellow travels ~200px vs ~310px, so equal reaction time
   sizeWeights: [22, 20, 18, 16, 13, 11], // vial sizes 1..6
 };
 
