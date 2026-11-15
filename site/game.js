@@ -172,10 +172,13 @@ function endGame(reason) {
   if (S.over) return;
   S.over = true; beep(110, 0.5, 'sawtooth');
   const snap = S.snap;
+  save.run = null; persist(); // dying ends the run; only the paid continue below can bring it back
   const can = save.coins >= CONFIG.continueCost;
   show(`<h1>Game over</h1><p>${reason}</p><p>Coins: ${save.coins}</p>`, [
     [`Continue level ${snap.level} (${CONFIG.continueCost} coins)`, () => {
-      save.coins -= CONFIG.continueCost; persist(); startLevel(snap);
+      save.coins -= CONFIG.continueCost;
+      save.run = { level: snap.level, vats: snap.vats.slice(), gauge: snap.gauge, score: snap.score };
+      persist(); startLevel(snap);
     }, '', !can],
     ['Restart from level 1', () => { save.run = null; persist(); startLevel(freshRun()); }],
     ['Main menu', menu, 'ghost'],
