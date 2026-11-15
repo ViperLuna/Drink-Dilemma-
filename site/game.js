@@ -20,9 +20,9 @@ const CONFIG = {
 
 // ---------- Layout ----------
 const W = 360, H = 700;
-const RIM_Y = [78, 146], VAT_TOP = 380, VAT_BOT = 500, VAT_W = 84;
+const RIM_Y = [78, 146], VAT_TOP = 340, VAT_BOT = 460, VAT_W = 84;
 const VAT_X = [70, 180, 290];
-const BELT_Y = 520;
+const BELT_Y = 480;
 const SLOT_X = [60, 180, 300];
 const COLORS = [
   { name: 'red', hex: '#e5383b', pat: 'stripes' },
@@ -97,7 +97,7 @@ function spawnCustomer(vip) {
   const slot = [0, 1, 2].find(i => !used.has(i));
   if (slot === undefined) return false;
   const order = vip ? [randInt(4, 6), randInt(4, 6), randInt(4, 6)] : genOrder(S.level);
-  S.customers.push({ slot, order, vip, state: 'wait', t: 0, drop: 0 });
+  S.customers.push({ slot, order, vip, look: randomLook(vip), state: 'wait', t: 0, drop: 0 });
   if (!vip) S.spawned++;
   return true;
 }
@@ -312,7 +312,7 @@ function update(dt) {
       d.c.state = 'leaving';
       const p = points(d.c); S.score += p;
       if (!d.c.vip) S.served++;
-      S.fx.push({ t: 0, x: SLOT_X[d.c.slot], y: 560, text: '+' + p, col: '#fff' });
+      S.fx.push({ t: 0, x: SLOT_X[d.c.slot], y: 522, text: '+' + p, col: '#fff' });
     }
   }
   for (const c of S.customers.slice()) {
@@ -341,6 +341,7 @@ function pattern(kind, x, y, w, h, col = 'rgba(0,0,0,.35)') {
   }
   ctx.restore();
 }
+function rrp(x, y, w, h, r) { ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); } // sub-path only
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 function text(s, x, y, size = 14, col = '#fff', align = 'center') {
   ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y);
@@ -400,6 +401,63 @@ function drawDrink(x, y, code, total, scale = 1) {
   else if (shape === 2) { ctx.moveTo(-13, -8); ctx.lineTo(13, -8); ctx.quadraticCurveTo(13, 12, 0, 12); ctx.quadraticCurveTo(-13, 12, -13, -8); }
   else { ctx.rect(-5, -4, 10, 18); ctx.rect(-2.5, -16, 5, 12); }
   ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
+// ---------- Customers: simple people made of swappable parts ----------
+const SKIN = ['#ffdbb4', '#f4c7a1', '#e0a97c', '#c68642', '#8d5524', '#6b4423'];
+const HAIR_COL = ['#2b1b10', '#6b3e1e', '#d9a441', '#c2410c', '#9ca3af', '#111827', '#7c3aed', '#0ea5e9'];
+const PANTS = ['#1e3a8a', '#374151', '#4b5563', '#7c5b3b', '#14532d', '#111827', '#9a3412'];
+const pick = a => a[randInt(0, a.length - 1)];
+function randomLook(vip) {
+  return {
+    skin: pick(SKIN), hair: pick(HAIR_COL), pants: pick(PANTS),
+    shirt: `hsl(${randInt(0, 359)},${randInt(45, 80)}%,${randInt(40, 62)}%)`,
+    style: vip ? pick([0, 1, 4]) : randInt(0, 6), // 0 bald 1 short 2 spiky 3 bun 4 long 5 mohawk 6 curly
+    eyes: randInt(0, 4), mouth: randInt(0, 2),
+  };
+}
+function drawPerson(x, hy, L, vip) {
+  const fill = (c, fn) => { ctx.fillStyle = c; ctx.beginPath(); fn(); ctx.fill(); };
+  // legs + shoes
+  fill(L.pants, () => { rrp(x - 11, hy + 28, 10, 16, 2); rrp(x + 1, hy + 28, 10, 16, 2); });
+  fill('#222', () => { rrp(x - 12, hy + 42, 12, 5, 2); rrp(x, hy + 42, 12, 5, 2); });
+  // torso + arms
+  fill(L.shirt, () => { rrp(x - 14, hy + 11, 28, 20, 6); rrp(x - 20, hy + 13, 7, 15, 3); rrp(x + 13, hy + 13, 7, 15, 3); });
+  fill(L.skin, () => { ctx.arc(x - 16.5, hy + 29, 3.5, 0, 7); ctx.moveTo(x + 20, hy + 29); ctx.arc(x + 16.5, hy + 29, 3.5, 0, 7); });
+  // hair behind head
+  if (L.style === 4) fill(L.hair, () => rrp(x - 15, hy - 12, 30, 32, 12));
+  // head
+  fill(L.skin, () => ctx.arc(x, hy, 13, 0, 7));
+  // front hair
+  const cap = () => { ctx.arc(x, hy - 1, 14, Math.PI, 0); ctx.closePath(); };
+  if (L.style === 1 || L.style === 4) fill(L.hair, cap);
+  else if (L.style === 3) { fill(L.hair, cap); fill(L.hair, () => ctx.arc(x, hy - 17, 6, 0, 7)); }
+  else if (L.style === 2) fill(L.hair, () => { ctx.moveTo(x - 14, hy - 3); [-14, -9, -5, 0, 5, 9, 14].forEach((px, k) => ctx.lineTo(x + px, hy - (k % 2 ? 11 : 20))); ctx.lineTo(x + 14, hy - 3); });
+  else if (L.style === 5) fill(L.hair, () => rrp(x - 3, hy - 21, 6, 13, 3));
+  else if (L.style === 6) fill(L.hair, () => [-10, -5, 0, 5, 10].forEach((px, k) => { ctx.moveTo(x + px + 5, hy - 10 - (k % 2) * 3); ctx.arc(x + px, hy - 10 - (k % 2) * 3, 5, 0, 7); }));
+  // eyes
+  ctx.fillStyle = '#222'; ctx.strokeStyle = '#222'; ctx.lineWidth = 1.6;
+  const ey = hy - 1;
+  [-5, 5].forEach((ox, k) => {
+    const ex = x + ox;
+    if (L.eyes === 0) fill('#222', () => ctx.arc(ex, ey, 1.8, 0, 7));
+    else if (L.eyes === 1) fill('#222', () => ctx.ellipse(ex, ey, 1.8, 3, 0, 0, 7));
+    else if (L.eyes === 2) { ctx.beginPath(); ctx.moveTo(ex - 3, ey); ctx.lineTo(ex + 3, ey); ctx.stroke(); }
+    else if (L.eyes === 3) { fill('#fff', () => ctx.arc(ex, ey, 3.6, 0, 7)); fill('#222', () => ctx.arc(ex, ey, 1.7, 0, 7)); }
+    else if (k === 0) fill('#222', () => ctx.arc(ex, ey, 1.8, 0, 7));
+    else { ctx.beginPath(); ctx.arc(ex, ey + 1, 3, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); } // wink
+  });
+  // mouth
+  ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 1.6; ctx.beginPath();
+  if (L.mouth === 0) ctx.arc(x, hy + 3, 5, 0.15 * Math.PI, 0.85 * Math.PI);
+  else if (L.mouth === 1) { ctx.moveTo(x - 4, hy + 7); ctx.lineTo(x + 4, hy + 7); }
+  else ctx.arc(x, hy + 7, 2.4, 0, 7);
+  L.mouth === 2 ? ctx.fill() : ctx.stroke();
+  // VIP-only accessory: gold crown
+  if (vip) {
+    fill('#ffd60a', () => { ctx.moveTo(x - 10, hy - 11); ctx.lineTo(x - 10, hy - 23); ctx.lineTo(x - 5, hy - 17); ctx.lineTo(x, hy - 25); ctx.lineTo(x + 5, hy - 17); ctx.lineTo(x + 10, hy - 23); ctx.lineTo(x + 10, hy - 11); });
+    ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
 }
 
 function drawOrder(c, x, y) {
@@ -476,10 +534,8 @@ function draw() {
   // customers
   for (const c of S.customers) {
     const x = SLOT_X[c.slot], dy = c.drop;
-    if (c.state !== 'leaving') drawOrder(c, x, 540);
-    ctx.fillStyle = c.vip ? '#ffd60a' : '#f4a261'; ctx.beginPath(); ctx.arc(x, 664 + dy, 22, 0, 7); ctx.fill();
-    ctx.fillStyle = '#222'; ctx.fillRect(x - 9, 659 + dy, 4, 4); ctx.fillRect(x + 5, 659 + dy, 4, 4);
-    ctx.fillRect(x - 7, 672 + dy, 14, 3);
+    if (c.state !== 'leaving') drawOrder(c, x, 500);
+    drawPerson(x, 634 + dy, c.look || (c.look = randomLook(c.vip)), c.vip);
   }
   for (const d of S.drinks) drawDrink(d.x, BELT_Y - 12, d.code, d.total, 0.9);
 
@@ -517,6 +573,6 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.__dd = { get S() { return S; }, CONFIG, save };
+window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx };
 menu();
 })();
