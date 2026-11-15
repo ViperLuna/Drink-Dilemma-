@@ -346,6 +346,14 @@ function text(s, x, y, size = 14, col = '#fff', align = 'center') {
   ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y);
 }
 
+// vat outline: straight sides, rounded bottom
+function vatPath(x, y, w, h, r = 30) {
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - r);
+  ctx.bezierCurveTo(x + w, y + h - r * 0.3, x + w - r * 0.4, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.bezierCurveTo(x + r * 0.4, y + h, x, y + h - r * 0.3, x, y + h - r); ctx.closePath();
+}
+
 function drawVial(v) {
   const h = vialH(v), w = vialW(v);
   if (v.kind === 'coin') {
@@ -437,16 +445,22 @@ function draw() {
   VAT_X.forEach((x, i) => {
     const sh = S.shake[i] > 0 ? Math.sin(S.t * 60) * 4 * (S.shake[i] / 0.4) : 0;
     const left = x - VAT_W / 2 + sh, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.disp[i] / CONFIG.vatMax;
+    vatPath(left, VAT_TOP, VAT_W, hgt);
+    ctx.save(); ctx.clip();
     ctx.fillStyle = '#2a2a40'; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
     // faint tint + pattern so an empty vat still shows its color
     ctx.globalAlpha = 0.22; ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);
     pattern(COLORS[i].pat, left, VAT_TOP, VAT_W, hgt, 'rgba(255,255,255,.5)'); ctx.globalAlpha = 1;
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT - fill, VAT_W, fill);
     pattern(COLORS[i].pat, left, VAT_BOT - fill, VAT_W, fill);
-    ctx.strokeStyle = S.shake[i] > 0 ? '#ff4d4d' : COLORS[i].hex; ctx.lineWidth = 5; ctx.strokeRect(left, VAT_TOP, VAT_W, hgt);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(left - 2.5, VAT_TOP - 2.5, VAT_W + 5, hgt + 5);
+    if (fill > 2) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(left, VAT_BOT - fill, VAT_W, 3); } // liquid surface
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(left + 8, VAT_TOP, 7, hgt); // glass shine
+    ctx.restore();
+    vatPath(left, VAT_TOP, VAT_W, hgt);
+    ctx.lineJoin = 'round'; ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 8; ctx.stroke();
+    ctx.strokeStyle = S.shake[i] > 0 ? '#ff4d4d' : COLORS[i].hex; ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = '#e2e8f0'; rr(left - 5, VAT_TOP - 7, VAT_W + 10, 9, 4); ctx.fill(); // rim lip
     // label plate: color + pattern + name + count
-    ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left, VAT_BOT + 0, VAT_W, 0);
     ctx.fillStyle = '#111'; ctx.fillRect(left + 8, VAT_TOP + 6, VAT_W - 16, 22);
     ctx.fillStyle = COLORS[i].hex; ctx.fillRect(left + 10, VAT_TOP + 8, 18, 18); pattern(COLORS[i].pat, left + 10, VAT_TOP + 8, 18, 18);
     text(COLORS[i].name.toUpperCase(), left + 32, VAT_TOP + 17, 10, '#fff', 'left');
