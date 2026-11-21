@@ -227,8 +227,40 @@ function menu() {
   else if (save.run) b.push([`Continue (level ${save.run.level})`, () => startLevel(save.run)]);
   b.push(['New game', () => { save.run = null; persist(); startLevel(freshRun()); }, save.run ? 'ghost' : '']);
   b.push([`Sound: ${save.sound ? 'On' : 'Off'}`, () => { save.sound = !save.sound; persist(); beep(600); menu(); }, 'ghost']);
+  const root = document.documentElement;
+  if (root.requestFullscreen || root.webkitRequestFullscreen) {
+    b.push([isFullscreen() ? 'Exit fullscreen' : 'Fullscreen', toggleFullscreen, 'ghost']);
+  }
+  if (deferredInstall) b.push(['Install app', installApp, 'ghost']);
+  let hint = '';
+  if (isIOS && !isStandalone()) hint = '<p class="hint">For fullscreen on iPhone: tap Share, then "Add to Home Screen".</p>';
   show(`<h1>Drink Dilemma</h1><p>Coins: ${save.coins}</p>`, b);
+  if (hint) overlay.insertAdjacentHTML('beforeend', hint);
 }
+
+// ---------- Fullscreen / install ----------
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+let deferredInstall = null;
+function toggleFullscreen() {
+  const root = document.documentElement;
+  try {
+    if (isFullscreen()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else {
+      const req = (root.requestFullscreen || root.webkitRequestFullscreen).call(root, { navigationUI: 'hide' });
+      if (req && req.then) req.then(() => { try { screen.orientation.lock('portrait').catch(() => {}); } catch (e) {} }).catch(() => {});
+    }
+  } catch (e) {}
+}
+function installApp() {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  deferredInstall.userChoice.finally(() => { deferredInstall = null; if (!S) menu(); });
+}
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (!S) menu(); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; if (!S) menu(); });
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 
 // ---------- Input ----------
 // Is the point on this vial's flask shape (neck + triangular body), with a little finger padding?
@@ -576,14 +608,20 @@ function draw() {
 
 // ---------- Loop / resize ----------
 function resize() {
-  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const cs = getComputedStyle(document.body), px = k => parseFloat(cs[k]) || 0;
+  const availW = window.innerWidth - px('paddingLeft') - px('paddingRight'), availH = window.innerHeight - px('paddingTop') - px('paddingBottom');
+  const s = Math.min(availW / W, availH / H);
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px';
   canvas.width = W * s * dpr; canvas.height = H * s * dpr;
   ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
-  $('wrap').style.width = W * s + 'px';
+  $('wrap').style.width = W * s + 'px'; $('wrap').style.height = H * s + 'px';
 }
-window.addEventListener('resize', resize); resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+document.addEventListener('fullscreenchange', () => { resize(); if (!S) menu(); });
+document.addEventListener('webkitfullscreenchange', () => { resize(); if (!S) menu(); });
+resize();
 
 let last = performance.now();
 function frame(now) {

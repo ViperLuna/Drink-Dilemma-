@@ -55,6 +55,12 @@ Marked with a crown, not just a color.
 - Saves after each completed level (browser localStorage). Menu: Continue, New Game, Sound toggle.
 - Splash screen later.
 
+## Install / fullscreen
+- Installable PWA (manifest, icons, service worker). Works offline after the first load.
+- Menu has a **Fullscreen** button where the browser supports it, and an **Install app** button on Android/Chrome.
+- iPhone Safari can't do web fullscreen: the menu shows an "Add to Home Screen" hint instead (installed, it runs fullscreen).
+- The service worker is network-first, so new versions arrive on the next load; the cache is only the offline fallback.
+
 ## Accessibility
 Red, blue, and yellow each have a **pattern** (stripes, dots, waves) everywhere they appear, plus numbers.
 Color is never the only signal.

@@ -1,0 +1,17 @@
+{
+  "id": "drink-dilemma",
+  "name": "Drink Dilemma",
+  "short_name": "Drink Dilemma",
+  "description": "Tap vials into the right vats, fill orders, and don't overflow.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#1b1b2b",
+  "theme_color": "#1b1b2b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
