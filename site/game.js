@@ -82,12 +82,12 @@ function bell(ac, dest, t0) {
   });
 }
 const stats = { dings: 0 };
-function ding() { // plays just after the drop sound, when a landing makes an order "covered"
+function ding() { // plays the instant a landing makes an order "covered" (layered with the drop sound)
   stats.dings++;
   if (!save.sound) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    bell(actx, actx.destination, actx.currentTime + 0.14);
+    bell(actx, actx.destination, actx.currentTime);
   } catch (e) {}
 }
 function drop(size) {
