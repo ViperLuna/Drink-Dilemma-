@@ -16,7 +16,9 @@ Tunable numbers live in the `CONFIG` object at the top of `site/game.js`.
   down the belt, the customer ducks out, points awarded.
   Customers are served in arrival order, unless the vats satisfy a later customer and not an earlier one.
 - **Serve delay:** once the vats cover an order, a **ding** plays and the order waits **1.5 s** (green outline + bar on the
-  bubble) before serving, so the player can see the fill land. If the vats stop covering it, the timer restarts.
+  bubble) before serving, so the player can see the fill land.
+- **Coverage is a reservation:** a covered order holds its color; a second order wanting the same color isn't covered
+  (no green, no ding) until the vats hold enough for both. Coverage is never taken back, so the ding is a promise.
 
 ## Overflow gauge (6 = game over)
 +1 for each of: wrong-color vat, vial that doesn't fully fit (the part that fits still goes in, any size = +1),

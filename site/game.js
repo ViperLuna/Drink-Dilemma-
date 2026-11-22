@@ -189,17 +189,21 @@ function land(v, i) {
   checkServe();
 }
 
-// An order is served only after the vats have covered it for CONFIG.serveDelay seconds.
-// If the vats stop covering it (another order drained them), its timer starts over.
+// Coverage is a reservation. An order is "covered" when the vats hold enough for it AFTER the orders that
+// already hold a reservation. Reservations are never taken back, so a covered order stays covered until served.
+// New reservations go in arrival order; a later customer can still be covered when an earlier one isn't.
+// A covered order is served once it has been covered for CONFIG.serveDelay seconds.
 function checkServe(dt = 0) {
-  for (const k of S.customers) {
-    if (k.state !== 'wait') continue;
+  const pool = S.vats.slice();
+  const waiting = S.customers.filter(k => k.state === 'wait');
+  const ordered = [...waiting.filter(k => k.ready != null), ...waiting.filter(k => k.ready == null)];
+  for (const k of ordered) {
     if (S.grace && !S.graceSet.has(k)) { k.ready = null; continue; }
-    if (canServe(k.order)) {
+    if (k.order.every((n, i) => pool[i] >= n)) {
+      k.order.forEach((n, i) => pool[i] -= n);
       if (k.ready == null) { k.ready = CONFIG.serveDelay; ding(); }
       k.ready -= dt;
-    }
-    else k.ready = null;
+    } else k.ready = null; // only ever true for orders that were not yet covered
   }
   let c;
   while (!S.over && (c = S.customers.find(k => k.state === 'wait' && k.ready != null && k.ready <= 0 && canServe(k.order)))) {
