@@ -15,6 +15,7 @@ const CONFIG = {
   vipFromLevel: 8,
   vipChance: 0.1,
   vipMultiplier: 3,
+  serveDelay: 2,         // seconds an order waits once the vats cover it, so the fill is visible
   speedRange: [70, 150],       // px/s for red, blue, mop, coin, rainbow
   yellowSpeedRange: [45, 97],   // ~65% of the others: yellow travels ~200px vs ~310px, so equal reaction time
   sizeWeights: [22, 20, 18, 16, 13, 11], // vial sizes 1..6
@@ -169,11 +170,18 @@ function land(v, i) {
   checkServe();
 }
 
-function checkServe() {
+// An order is served only after the vats have covered it for CONFIG.serveDelay seconds.
+// If the vats stop covering it (another order drained them), its timer starts over.
+function checkServe(dt = 0) {
+  for (const k of S.customers) {
+    if (k.state !== 'wait') continue;
+    if (canServe(k.order)) k.ready = (k.ready == null ? CONFIG.serveDelay : k.ready) - dt;
+    else k.ready = null;
+  }
   let c;
-  while (!S.over && (c = S.customers.find(k => k.state === 'wait' && canServe(k.order)))) {
+  while (!S.over && (c = S.customers.find(k => k.state === 'wait' && k.ready != null && k.ready <= 0 && canServe(k.order)))) {
     c.order.forEach((n, i) => S.vats[i] -= n);
-    c.state = 'served';
+    c.state = 'served'; c.ready = null;
     S.drinks.push({ c, x: 0, code: recipeCode(c.order), total: sum(c.order) });
     beep(660, 0.1, 'triangle');
   }
@@ -316,7 +324,7 @@ function update(dt) {
     if (S.level >= CONFIG.vipFromLevel && Math.random() < CONFIG.vipChance && !S.customers.some(c => c.vip)) spawnCustomer(true);
   }
 
-  checkServe(); // serve anyone the vats already cover (e.g. on arrival)
+  checkServe(dt); // serve anyone whose order the vats have covered for long enough
 
   // vial spawning
   S.spawnT -= dt;
@@ -518,6 +526,10 @@ function drawOrder(c, x, y) {
   ctx.fillStyle = '#fff'; rr(left, y, bw, bh, 12); ctx.fill();
   ctx.beginPath(); ctx.moveTo(x - 8, y + bh); ctx.lineTo(x, y + bh + 10); ctx.lineTo(x + 8, y + bh); ctx.fill();
   if (c.vip) { ctx.strokeStyle = '#ffd60a'; ctx.lineWidth = 3; rr(left, y, bw, bh, 12); ctx.stroke(); text('♛ VIP', left + 4, y + 8, 11, '#b8860b', 'left'); }
+  if (c.ready != null && c.state === 'wait') { // order is covered: show it's about to be served
+    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4; rr(left, y, bw, bh, 12); ctx.stroke();
+    ctx.fillStyle = '#22c55e'; ctx.fillRect(left + 8, y + bh - 5, (bw - 16) * Math.max(0, 1 - c.ready / CONFIG.serveDelay), 3);
+  }
   drawDrink(x + (c.vip ? 26 : 0), y + 24, recipeCode(c.order), sum(c.order), 1.25);
   c.order.forEach((n, i) => {
     if (!n) return;
