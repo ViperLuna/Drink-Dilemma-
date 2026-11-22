@@ -15,6 +15,8 @@ Tunable numbers live in the `CONFIG` object at the top of `site/game.js`.
 - Orders **auto-serve** as soon as the vats can cover them. Vats drain by the order amount, the drink slides
   down the belt, the customer ducks out, points awarded.
   Customers are served in arrival order, unless the vats satisfy a later customer and not an earlier one.
+- **Serve delay:** once the vats cover an order, a **ding** plays and the order waits **1.5 s** (green outline + bar on the
+  bubble) before serving, so the player can see the fill land. If the vats stop covering it, the timer restarts.
 
 ## Overflow gauge (6 = game over)
 +1 for each of: wrong-color vat, vial that doesn't fully fit (the part that fits still goes in, any size = +1),

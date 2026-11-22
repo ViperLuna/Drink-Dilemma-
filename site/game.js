@@ -15,7 +15,7 @@ const CONFIG = {
   vipFromLevel: 8,
   vipChance: 0.1,
   vipMultiplier: 3,
-  serveDelay: 2,         // seconds an order waits once the vats cover it, so the fill is visible
+  serveDelay: 1.5,       // seconds an order waits once the vats cover it, so the fill is visible
   speedRange: [70, 150],       // px/s for red, blue, mop, coin, rainbow
   yellowSpeedRange: [45, 97],   // ~65% of the others: yellow travels ~200px vs ~310px, so equal reaction time
   sizeWeights: [22, 20, 18, 16, 13, 11], // vial sizes 1..6
@@ -70,6 +70,25 @@ function plip(ac, dest, t0, size = 1, jitter = Math.random()) {
   g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+// Bell "ding": two bright partials with a fast attack and a ringing decay.
+function bell(ac, dest, t0) {
+  [[1568, 0.16, 0.7], [3136 * 1.005, 0.07, 0.35], [4704, 0.03, 0.2]].forEach(([f, vol, dur]) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.02);
+  });
+}
+const stats = { dings: 0 };
+function ding() { // plays just after the drop sound, when a landing makes an order "covered"
+  stats.dings++;
+  if (!save.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    bell(actx, actx.destination, actx.currentTime + 0.14);
+  } catch (e) {}
 }
 function drop(size) {
   if (!save.sound) return;
@@ -176,7 +195,10 @@ function checkServe(dt = 0) {
   for (const k of S.customers) {
     if (k.state !== 'wait') continue;
     if (S.grace && !S.graceSet.has(k)) { k.ready = null; continue; }
-    if (canServe(k.order)) k.ready = (k.ready == null ? CONFIG.serveDelay : k.ready) - dt;
+    if (canServe(k.order)) {
+      if (k.ready == null) { k.ready = CONFIG.serveDelay; ding(); }
+      k.ready -= dt;
+    }
     else k.ready = null;
   }
   let c;
@@ -656,6 +678,6 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx, plip };
+window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx, plip, bell, stats };
 menu();
 })();
