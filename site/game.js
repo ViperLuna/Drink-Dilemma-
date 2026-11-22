@@ -175,6 +175,7 @@ function land(v, i) {
 function checkServe(dt = 0) {
   for (const k of S.customers) {
     if (k.state !== 'wait') continue;
+    if (S.grace && !S.graceSet.has(k)) { k.ready = null; continue; }
     if (canServe(k.order)) k.ready = (k.ready == null ? CONFIG.serveDelay : k.ready) - dt;
     else k.ready = null;
   }
@@ -282,7 +283,7 @@ function hits(v, px, py, pad = 7) {
   return dx <= nw / 2 + (w / 2 - nw / 2) * f + pad;
 }
 canvas.addEventListener('pointerdown', e => {
-  if (!S || S.over) return;
+  if (!S || S.over || S.grace) return;
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
   let best = null;
@@ -310,16 +311,26 @@ canvas.addEventListener('pointerdown', e => {
 });
 
 // ---------- Update ----------
+// Grace: when the clock hits zero, orders that are already covered (and drinks already sliding) may still finish.
+// Nothing new starts: no spawns, no taps, and orders that become covered afterwards don't count.
+function startGrace() {
+  S.grace = true;
+  S.graceSet = new Set(S.customers.filter(c => c.state === 'wait' && c.ready != null));
+  if (S.graceSet.size === 0 && S.drinks.length === 0) endGame("Time's up!");
+}
+
 function update(dt) {
   S.t += dt;
-  S.timeLeft -= dt;
-  if (S.timeLeft <= 0) { S.timeLeft = 0; return endGame("Time's up!"); }
+  if (!S.grace) {
+    S.timeLeft -= dt;
+    if (S.timeLeft <= 0) { S.timeLeft = 0; startGrace(); if (S.over) return; }
+  }
 
   // customers
   const maxAtOnce = Math.min(3, 2 + Math.floor(S.level / 4));
   const active = S.customers.filter(c => !c.vip && c.state !== 'gone').length;
   S.custT -= dt;
-  if (S.custT <= 0 && S.spawned < S.need && active < maxAtOnce) {
+  if (!S.grace && S.custT <= 0 && S.spawned < S.need && active < maxAtOnce) {
     spawnCustomer(false); S.custT = rand(0.5, 2);
     if (S.level >= CONFIG.vipFromLevel && Math.random() < CONFIG.vipChance && !S.customers.some(c => c.vip)) spawnCustomer(true);
   }
@@ -328,12 +339,12 @@ function update(dt) {
 
   // vial spawning
   S.spawnT -= dt;
-  if (S.spawnT <= 0) {
+  if (!S.grace && S.spawnT <= 0) {
     spawnVial('vial', randInt(0, 2));
     S.spawnT = rand(0.8, 1.5) / (1 + 0.04 * (S.level - 1));
   }
-  if (Math.random() < CONFIG.powerRate * dt) spawnVial(Math.random() < 0.5 ? 'mop' : 'rainbow', 1);
-  if (Math.random() < CONFIG.coinRate * dt) spawnVial('coin', 1);
+  if (!S.grace && Math.random() < CONFIG.powerRate * dt) spawnVial(Math.random() < 0.5 ? 'mop' : 'rainbow', 1);
+  if (!S.grace && Math.random() < CONFIG.coinRate * dt) spawnVial('coin', 1);
 
   // vials
   for (const v of S.vials.slice()) {
@@ -381,7 +392,8 @@ function update(dt) {
   }
   S.fx.forEach(f => f.t += dt); S.fx = S.fx.filter(f => f.t < 1);
 
-  if (S.served >= S.need && S.drinks.length === 0) levelComplete();
+  if (S.served >= S.need && S.drinks.length === 0) return levelComplete();
+  if (S.grace && S.drinks.length === 0 && ![...S.graceSet].some(c => c.state === 'wait' && c.ready != null)) endGame("Time's up!");
 }
 
 // ---------- Drawing ----------

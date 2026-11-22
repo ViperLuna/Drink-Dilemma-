@@ -22,6 +22,8 @@ vial hitting the ground. Rainbow vial on the ground = +2. The gauge persists acr
 
 ## Levels
 - One timer per level (**2 minutes**, same every level). Timer hits zero = game over.
+  **Grace:** at zero, orders already covered by the vats (and drinks already sliding) may still finish; nothing new
+  starts (no spawns, no taps). If that completes the level, you pass.
 - Level ends when N customers are served. Level end gives a break screen and the player taps to continue.
 - Vats and gauge **carry over** between levels.
 - Difficulty: customers per level and order size grow together. Level 1 is only 3-unit single-color drinks.
