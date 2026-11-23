@@ -107,7 +107,7 @@ function startLevel(run) {
     level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score,
     snap: { level: run.level, vats: run.vats.slice(), gauge: run.gauge, score: run.score },
     timeLeft: CONFIG.timeLimit, need: 3 + run.level, served: 0, spawned: 0,
-    disp: run.vats.slice(), shake: [0, 0, 0], parts: [],
+    disp: run.vats.slice(), shake: [0, 0, 0], aura: [0, 0, 0], parts: [],
     customers: [], vials: [], drinks: [], fx: [], spawnT: 1, custT: 0.5, over: false, t: 0,
   };
   overlay.hidden = true;
@@ -399,6 +399,12 @@ function update(dt) {
     S.disp[i] = Math.abs(diff) <= step ? S.vats[i] : S.disp[i] + Math.sign(diff) * step;
     S.shake[i] = Math.max(0, S.shake[i] - dt);
   }
+  // aura: vats that are part of a covered order glow until that order is served
+  const covered = S.customers.filter(c => c.state === 'wait' && c.ready != null);
+  for (let i = 0; i < 3; i++) {
+    const target = covered.some(c => c.order[i] > 0) ? 1 : 0;
+    S.aura[i] += Math.sign(target - S.aura[i]) * Math.min(Math.abs(target - S.aura[i]), 5 * dt);
+  }
   for (const q of S.parts) { q.t += dt; q.vy += 900 * dt; q.x += q.vx * dt; q.y += q.vy * dt; }
   S.parts = S.parts.filter(q => q.t < 0.9 && q.y < VAT_BOT + 4);
 
@@ -606,6 +612,13 @@ function draw() {
   VAT_X.forEach((x, i) => {
     const sh = S.shake[i] > 0 ? Math.sin(S.t * 60) * 4 * (S.shake[i] / 0.4) : 0;
     const left = x - VAT_W / 2 + sh, hgt = VAT_BOT - VAT_TOP, fill = hgt * S.disp[i] / CONFIG.vatMax;
+    if (S.aura[i] > 0) { // pulsing glow: fades in/out, never relies on color alone (it moves)
+      const a = S.aura[i] * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(S.t * 5)));
+      ctx.save(); vatPath(left, VAT_TOP, VAT_W, hgt); ctx.lineJoin = 'round';
+      ctx.shadowColor = `rgba(74,222,128,${a})`; ctx.shadowBlur = 28;
+      ctx.strokeStyle = `rgba(74,222,128,${a})`; ctx.lineWidth = 10; ctx.stroke(); ctx.stroke();
+      ctx.restore();
+    }
     vatPath(left, VAT_TOP, VAT_W, hgt);
     ctx.save(); ctx.clip();
     ctx.fillStyle = '#2a2a40'; ctx.fillRect(left, VAT_TOP, VAT_W, hgt);

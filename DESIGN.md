@@ -19,6 +19,7 @@ Tunable numbers live in the `CONFIG` object at the top of `site/game.js`.
   bubble) before serving, so the player can see the fill land.
 - **Coverage is a reservation:** a covered order holds its color; a second order wanting the same color isn't covered
   (no green, no ding) until the vats hold enough for both. Coverage is never taken back, so the ding is a promise.
+- **Aura:** the vats that are part of a covered order glow green (pulsing) from the ding until the order is served.
 
 ## Overflow gauge (6 = game over)
 +1 for each of: wrong-color vat, vial that doesn't fully fit (the part that fits still goes in, any size = +1),
