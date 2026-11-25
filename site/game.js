@@ -329,6 +329,7 @@ function endGame(reason) {
 
 // ---------- UI overlays ----------
 function show(html, buttons) {
+  overlay.style.background = ''; // default dim; the pause menu overrides this
   overlay.innerHTML = html;
   buttons.forEach(([label, fn, cls, disabled]) => {
     const b = document.createElement('button');
@@ -386,6 +387,29 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferr
 window.addEventListener('appinstalled', () => { deferredInstall = null; if (!S) menu(); });
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 
+// ---------- Pause ----------
+function pauseMenu() {
+  show('<h1>Paused</h1>', [
+    ['Resume', resumeGame],
+    [`Sound: ${save.sound ? 'On' : 'Off'}`, () => { save.sound = !save.sound; persist(); beep(600); pauseMenu(); }, 'ghost'],
+    ['Quit to main menu', menu, 'ghost'],
+  ]);
+  overlay.style.background = 'rgba(10,10,20,.98)'; // hide the board so pausing can't be used to study it
+}
+function pauseGame() {
+  if (!S || S.over || S.paused) return;
+  S.paused = true; setAmbience(false);
+  pauseMenu();
+}
+function resumeGame() {
+  if (!S || !S.paused) return;
+  S.paused = false; overlay.hidden = true; setAmbience(true);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); }); // leaving the page pauses the level
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') { if (S && S.paused) resumeGame(); else pauseGame(); }
+});
+
 // ---------- Input ----------
 // Is the point on this vial's flask shape (neck + triangular body), with a little finger padding?
 function hits(v, px, py, pad = 7) {
@@ -398,9 +422,11 @@ function hits(v, px, py, pad = 7) {
   return dx <= nw / 2 + (w / 2 - nw / 2) * f + pad;
 }
 canvas.addEventListener('pointerdown', e => {
-  if (!S || S.over || S.grace) return;
+  if (!S || S.over || S.paused) return;
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
+  if (px >= W - 54 && py <= 48) return pauseGame(); // generous tap area around the pause icon
+  if (S.grace) return;
   let best = null;
   for (const pad of [0, 8]) { // exact shape first (topmost wins); padding only if nothing was hit
     let bs = 1e9;
@@ -685,7 +711,11 @@ function draw() {
   // HUD
   text(`Lv ${S.level}`, 12, 16, 15, '#fff', 'left');
   text(`Served ${S.served}/${S.need}`, W / 2, 16, 13, '#cbd5e1');
-  text(`${save.coins} ●`, W - 12, 16, 15, '#ffd60a', 'right');
+  text(`${save.coins} ●`, W - 50, 16, 15, '#ffd60a', 'right');
+  if (!S.over) { // pause button
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(W - 42, 3, 30, 22, 6); ctx.fill();
+    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(W - 33, 8, 5, 12); ctx.fillRect(W - 24, 8, 5, 12);
+  }
   const frac = S.timeLeft / CONFIG.timeLimit;
   ctx.fillStyle = '#333'; ctx.fillRect(12, 28, W - 24, 8);
   ctx.fillStyle = frac < 0.2 ? '#ff4d4d' : '#4ade80'; ctx.fillRect(12, 28, (W - 24) * frac, 8);
@@ -782,7 +812,7 @@ resize();
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (S && !S.over) update(dt);
+  if (S && !S.over && !S.paused) update(dt);
   draw();
   requestAnimationFrame(frame);
 }

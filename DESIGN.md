@@ -69,6 +69,12 @@ Marked with a crown, not just a color.
   A normal Continue from the menu (no death) keeps vat levels and gauge.
   Otherwise restart from level 1. Coins are permanent and can be stockpiled.
 
+## Pause
+A pause button sits in the top-right corner of the play area (Escape/P on a keyboard). Pausing freezes the timer, vials, and
+ambience and covers the board. The pause menu has Resume, a sound toggle, and Quit to main menu (the saved run is unchanged).
+Leaving the page (switching apps/tabs) mid-level pauses automatically and stays paused until Resume. The pause screen is
+nearly opaque so pausing can't be used to study the board.
+
 ## Saving and menus
 - Saves after each completed level (browser localStorage). Menu: Continue, New Game, Sound toggle.
 - Splash screen later.
