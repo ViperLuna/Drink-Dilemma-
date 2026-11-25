@@ -213,10 +213,18 @@ function spill(x, y, col, n, spread = 1) {
     S.parts.push({ x: x + rand(-8, 8), y, vx: rand(-90, 90) * spread, vy: rand(-220, -60), col, t: 0 });
 }
 
+// The landing sound for any vial that goes into a vat: a pebble plop. Bigger vials sound a little lower, and a touch of
+// random pitch keeps repeats from sounding identical. Falls back to the synthesized drop if the files aren't loaded.
+function plopSound(size) {
+  if (!playSample('plop', (1.12 - size * 0.04) * rand(0.97, 1.03))) drop(size);
+}
+
 function land(v, i) {
   const x = VAT_X[i];
   if (v.kind === 'rainbow') {
-    S.vats[i] = CONFIG.vatMax; if (!playSample('rainbow')) beep(880, 0.2, 'triangle');
+    S.vats[i] = CONFIG.vatMax;
+    plopSound(3); // the plop, plus the rainbow splash layered on top
+    if (!playSample('rainbow')) beep(880, 0.2, 'triangle');
     S.fx.push({ t: 0, x, y: VAT_TOP - 10, text: 'FULL!', col: '#fff' });
   } else if (v.color !== i) {
     S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[v.color].hex, 14);
@@ -224,8 +232,7 @@ function land(v, i) {
   } else {
     const room = CONFIG.vatMax - S.vats[i];
     S.vats[i] += Math.min(room, v.size);
-    // bigger vials sound a little lower; a touch of random pitch keeps repeats from sounding identical
-    if (!playSample('plop', (1.12 - v.size * 0.04) * rand(0.97, 1.03))) drop(v.size);
+    plopSound(v.size);
     if (v.size > room) { S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[i].hex, 8 + 2 * (v.size - room)); addOverflow(1, x, VAT_TOP - 30, 'overflow!'); }
   }
   checkServe();
