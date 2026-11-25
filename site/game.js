@@ -95,6 +95,7 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
 // silence so the sound lands with the visual. Missing/unloaded files fall back to synth.
 const SAMPLES = {
   rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
+  levelcomplete: [['sounds/levelcomplete-1.mp3', 3.1, 0.08], ['sounds/levelcomplete-2.mp3', 4.4, 0], ['sounds/levelcomplete-3.mp3', 2.5, 0]], // level complete
   gameover: [['sounds/gameover-1.mp3', 0.87, 0], ['sounds/gameover-2.mp3', 0.8, 0], ['sounds/gameover-3.mp3', 0.82, 0], ['sounds/gameover-4.mp3', 1.0, 0]], // game over
   coin: [['sounds/coin-1.mp3', 8.6, 0], ['sounds/coin-2.mp3', 6.3, 0], ['sounds/coin-3.mp3', 3.4, 0]],                      // a coin is tapped
   mop: [['sounds/mop-1.mp3', 7.7, 0]],                                                                                     // a mop is tapped (scrubbing)
@@ -273,7 +274,7 @@ function levelComplete() {
   save.coins += CONFIG.levelCoins;
   save.run = { level: S.level + 1, vats: S.vats.slice(), gauge: S.gauge, score: S.score };
   persist();
-  beep(784, 0.25, 'triangle');
+  if (!playSample('levelcomplete')) beep(784, 0.25, 'triangle');
   show(`<h1>Level ${S.level} complete!</h1><p>+${CONFIG.levelCoins} coins &nbsp;|&nbsp; ${save.coins} total</p>`,
     [['Next level', () => startLevel(save.run)], ['Main menu', menu, 'ghost']]);
 }
