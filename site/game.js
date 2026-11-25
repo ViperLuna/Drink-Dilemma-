@@ -95,6 +95,7 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
 // silence so the sound lands with the visual. Missing/unloaded files fall back to synth.
 const SAMPLES = {
   rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
+  gameover: [['sounds/gameover-1.mp3', 0.87, 0], ['sounds/gameover-2.mp3', 0.8, 0], ['sounds/gameover-3.mp3', 0.82, 0], ['sounds/gameover-4.mp3', 1.0, 0]], // game over
   coin: [['sounds/coin-1.mp3', 8.6, 0], ['sounds/coin-2.mp3', 6.3, 0], ['sounds/coin-3.mp3', 3.4, 0]],                      // a coin is tapped
   mop: [['sounds/mop-1.mp3', 7.7, 0]],                                                                                     // a mop is tapped (scrubbing)
   tap: [['sounds/tap-1.mp3', 5.2, 0], ['sounds/tap-2.mp3', 6.8, 0], ['sounds/tap-3.mp3', 8.8, 0]],                          // a vial is tapped on the ceiling
@@ -279,7 +280,8 @@ function levelComplete() {
 
 function endGame(reason) {
   if (S.over) return;
-  S.over = true; beep(110, 0.5, 'sawtooth');
+  S.over = true;
+  if (!playSample('gameover')) beep(110, 0.5, 'sawtooth');
   const snap = S.snap;
   // keep the run on disk, flagged as lost: resuming it (here or from the menu) costs coins
   save.run = { level: snap.level, vats: snap.vats.slice(), gauge: snap.gauge, score: snap.score, lost: true }; persist();
