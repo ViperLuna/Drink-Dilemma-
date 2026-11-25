@@ -90,6 +90,44 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
     bell(actx, actx.destination, actx.currentTime);
   } catch (e) {}
 }
+// ---------- Sound files ----------
+// Add an entry here per event: [url, gain]. Gain boosts quiet recordings. Missing/unloaded files fall back to synth.
+const SAMPLES = {
+  rainbow: [['sounds/rainbow-1.mp3', 9.0], ['sounds/rainbow-2.mp3', 4.6], ['sounds/rainbow-3.mp3', 5.0]], // super vial lands in a vat
+};
+const sampleBuf = {}, lastPlayed = {};
+let samplesLoading = false;
+function getCtx() { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); return actx; }
+function loadSamples() { // runs on the first tap (browsers only allow audio after a gesture)
+  if (samplesLoading) return; samplesLoading = true;
+  let ac; try { ac = getCtx(); } catch (e) { return; }
+  for (const [name, list] of Object.entries(SAMPLES)) {
+    sampleBuf[name] = [];
+    list.forEach(([url, gain]) => {
+      fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+        .then(ab => new Promise((res, rej) => ac.decodeAudioData(ab, res, rej)))
+        .then(buf => sampleBuf[name].push({ buf, gain })).catch(() => {});
+    });
+  }
+}
+// Plays a random loaded variation (never the same twice in a row). Returns false if none is ready, so callers can fall back.
+function playSample(name) {
+  if (!save.sound) return true;
+  const list = sampleBuf[name];
+  if (!list || !list.length) return false;
+  let i = randInt(0, list.length - 1);
+  if (list.length > 1 && i === lastPlayed[name]) i = (i + 1) % list.length;
+  lastPlayed[name] = i;
+  try {
+    const ac = getCtx(); if (ac.state === 'suspended') ac.resume();
+    const src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = list[i].buf; g.gain.value = list[i].gain;
+    src.connect(g); g.connect(ac.destination); src.start();
+    return true;
+  } catch (e) { return false; }
+}
+document.addEventListener('pointerdown', loadSamples, { once: true });
+
 function drop(size) {
   if (!save.sound) return;
   try {
@@ -176,7 +214,7 @@ function spill(x, y, col, n, spread = 1) {
 function land(v, i) {
   const x = VAT_X[i];
   if (v.kind === 'rainbow') {
-    S.vats[i] = CONFIG.vatMax; beep(880, 0.2, 'triangle');
+    S.vats[i] = CONFIG.vatMax; if (!playSample('rainbow')) beep(880, 0.2, 'triangle');
     S.fx.push({ t: 0, x, y: VAT_TOP - 10, text: 'FULL!', col: '#fff' });
   } else if (v.color !== i) {
     S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[v.color].hex, 14);
@@ -695,6 +733,6 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx, plip, bell, stats };
+window.__dd = { get S() { return S; }, CONFIG, save, randomLook, drawPerson, ctx, plip, bell, stats, playSample, sampleBuf };
 menu();
 })();

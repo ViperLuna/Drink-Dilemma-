@@ -42,6 +42,11 @@ Recipe code is `R Y B` digits (e.g. 3 red = `300`, 2 red + 1 yellow = `210`, max
 The code deterministically picks container shape and a spread-out color (not physically accurate mixing, on purpose,
 for visual variety). Numbers and patterns on the order bubble are the exact answer.
 
+## Sound files
+Recorded sounds live in `site/sounds/` and are listed in the `SAMPLES` table in `game.js` (url + gain per variation; a random
+variation plays each time). Anything missing or not yet loaded falls back to a synthesized sound.
+Currently: three splash variations for the rainbow ("super") vial landing.
+
 ## Power-ups (rare, random, never guaranteed; no cap on count)
 - **Mop**: tap, it does a quick animation and vanishes. -3 overflow.
 - **Rainbow vial** (cycles red/yellow/blue): drops like a vial, fills **any** vat to full, no overflow.
