@@ -1,6 +1,6 @@
 // Network-first so updates always arrive; cache is the offline fallback.
-const CACHE = 'drink-dilemma-v3';
-const ASSETS = ['./', 'index.html', 'style.css', 'game.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'sounds/rainbow-1.mp3', 'sounds/rainbow-2.mp3', 'sounds/rainbow-3.mp3', 'sounds/plop-1.mp3', 'sounds/plop-2.mp3', 'sounds/plop-3.mp3'];
+const CACHE = 'drink-dilemma-v4';
+const ASSETS = ['./', 'index.html', 'style.css', 'game.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'sounds/rainbow-1.mp3', 'sounds/rainbow-2.mp3', 'sounds/rainbow-3.mp3', 'sounds/plop-1.mp3', 'sounds/plop-2.mp3', 'sounds/plop-3.mp3', 'sounds/tap-1.mp3', 'sounds/tap-2.mp3', 'sounds/tap-3.mp3'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

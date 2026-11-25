@@ -95,6 +95,7 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
 // silence so the sound lands with the visual. Missing/unloaded files fall back to synth.
 const SAMPLES = {
   rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
+  tap: [['sounds/tap-1.mp3', 5.2, 0], ['sounds/tap-2.mp3', 6.8, 0], ['sounds/tap-3.mp3', 8.8, 0]],                          // a vial is tapped on the ceiling
   plop: [['sounds/plop-1.mp3', 4.8, 0.125], ['sounds/plop-2.mp3', 2.7, 0.13], ['sounds/plop-3.mp3', 1.8, 0.015]],    // regular vial lands in its vat
 };
 const sampleBuf = {}, lastPlayed = {};
@@ -117,8 +118,8 @@ function playSample(name, rate = 1) {
   if (!save.sound) return true;
   const list = sampleBuf[name];
   if (!list || !list.length) return false;
-  let i = randInt(0, list.length - 1);
-  if (list.length > 1 && i === lastPlayed[name]) i = (i + 1) % list.length;
+  let i;
+  do { i = randInt(0, list.length - 1); } while (list.length > 1 && i === lastPlayed[name]); // uniform over the others
   lastPlayed[name] = i;
   try {
     const ac = getCtx(); if (ac.state === 'suspended') ac.resume();
@@ -381,7 +382,8 @@ canvas.addEventListener('pointerdown', e => {
     S.vials.splice(S.vials.indexOf(best), 1); beep(1000, 0.1, 'triangle');
     S.fx.push({ t: 0, x: best.x, y: best.y + 20, text: '+' + CONFIG.coinPickup + ' coins', col: '#ffd60a' });
   } else {
-    best.state = 'fall'; beep(300, 0.04);
+    best.state = 'fall';
+    if (!playSample('tap', rand(0.96, 1.04))) beep(300, 0.04);
   }
 });
 
