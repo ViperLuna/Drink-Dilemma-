@@ -48,7 +48,8 @@ variation plays each time). Anything missing or not yet loaded falls back to a s
 Currently: three pebble-plop variations that play for **every** vial landing in a vat (pitched a little lower for bigger
 vials), plus three splash variations layered on top when the rainbow ("super") vial lands.
 Three tap variations play when a vial is tapped on the ceiling (before it drops).
-Three glass-break variations play when a vial misses the vats and hits the floor (replaces the error buzz for that case). The offset column skips each file's leading silence so sounds land with the visual.
+Three glass-break variations play when a vial misses the vats and hits the floor (replaces the error buzz for that case).
+A scrubbing sound plays when the mop is tapped. The offset column skips each file's leading silence so sounds land with the visual.
 
 ## Power-ups (rare, random, never guaranteed; no cap on count)
 - **Mop**: tap, it does a quick animation and vanishes. -3 overflow.
