@@ -96,6 +96,7 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
 const SAMPLES = {
   rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
   tap: [['sounds/tap-1.mp3', 5.2, 0], ['sounds/tap-2.mp3', 6.8, 0], ['sounds/tap-3.mp3', 8.8, 0]],                          // a vial is tapped on the ceiling
+  break: [['sounds/break-1.mp3', 2.3, 0], ['sounds/break-2.mp3', 3.3, 0], ['sounds/break-3.mp3', 1.14, 0]],                     // a vial misses the vats and hits the floor
   plop: [['sounds/plop-1.mp3', 4.8, 0.125], ['sounds/plop-2.mp3', 2.7, 0.13], ['sounds/plop-3.mp3', 1.8, 0.015]],    // regular vial lands in its vat
 };
 const sampleBuf = {}, lastPlayed = {};
@@ -203,8 +204,8 @@ const vialW = v => v.kind === 'vial' ? 22 + v.size * 2.5 : 34;
 const vialRank = v => v.kind === 'vial' ? v.size : v.kind === 'rainbow' ? 7 : 0;
 
 // ---------- Rules ----------
-function addOverflow(n = 1, x = W / 2, y = 300, why = '') {
-  S.gauge += n; beep(160, 0.15, 'square');
+function addOverflow(n = 1, x = W / 2, y = 300, why = '', quiet = false) {
+  S.gauge += n; if (!quiet) beep(160, 0.15, 'square');
   S.fx.push({ t: 0, x, y, text: why ? why + ' +' + n : '+' + n + ' overflow', col: '#ff6b6b' });
   if (S.gauge >= CONFIG.gaugeMax) endGame('Overflow!');
 }
@@ -437,7 +438,8 @@ function update(dt) {
         else if (v.y >= VAT_BOT - 10) {
           S.vials.splice(S.vials.indexOf(v), 1);
           spill(v.x, VAT_BOT - 10, v.kind === 'rainbow' ? '#fff' : COLORS[v.color].hex, 10, 1.5);
-          addOverflow(v.kind === 'rainbow' ? 2 : 1, v.x, VAT_BOT - 30, 'missed!');
+          const broke = playSample('break', rand(0.97, 1.03)); // glass shatters on the floor; replaces the error buzz
+          addOverflow(v.kind === 'rainbow' ? 2 : 1, v.x, VAT_BOT - 30, 'missed!', broke);
         }
         if (S.over) return;
       }
