@@ -49,6 +49,8 @@ Currently: three pebble-plop variations that play for **every** vial landing in 
 vials), plus three splash variations layered on top when the rainbow ("super") vial lands.
 Three tap variations play when a vial is tapped on the ceiling (before it drops).
 Three glass-break variations play when a vial misses the vats and hits the floor (replaces the error buzz for that case).
+Three big-splash variations play when a vial lands in a vat and overflows (wrong color, or a vat too full): they replace the
+error buzz, and the plop for the partly-fitting case.
 A scrubbing sound plays when the mop is tapped. Three coin-pickup variations play when a coin is tapped. Four "womp womp" variations play on game over. Three brass fanfares play on level complete.
 A looping machine-hum **ambience** plays while a level is in progress. It fades out on game over, level complete, the menu,
 and whenever the page is hidden (switching apps/tabs), and resumes when the player returns mid-level. The offset column skips each file's leading silence so sounds land with the visual.
