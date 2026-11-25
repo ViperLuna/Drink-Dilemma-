@@ -95,6 +95,7 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
 // silence so the sound lands with the visual. Missing/unloaded files fall back to synth.
 const SAMPLES = {
   rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
+  coin: [['sounds/coin-1.mp3', 8.6, 0], ['sounds/coin-2.mp3', 6.3, 0], ['sounds/coin-3.mp3', 3.4, 0]],                      // a coin is tapped
   mop: [['sounds/mop-1.mp3', 7.7, 0]],                                                                                     // a mop is tapped (scrubbing)
   tap: [['sounds/tap-1.mp3', 5.2, 0], ['sounds/tap-2.mp3', 6.8, 0], ['sounds/tap-3.mp3', 8.8, 0]],                          // a vial is tapped on the ceiling
   break: [['sounds/break-1.mp3', 2.3, 0], ['sounds/break-2.mp3', 3.3, 0], ['sounds/break-3.mp3', 1.14, 0]],                     // a vial misses the vats and hits the floor
@@ -382,7 +383,8 @@ canvas.addEventListener('pointerdown', e => {
     S.fx.push({ t: 0, x: best.x, y: best.y + 20, text: '-3 overflow', col: '#7CFC9A' });
   } else if (best.kind === 'coin') {
     save.coins += CONFIG.coinPickup; persist();
-    S.vials.splice(S.vials.indexOf(best), 1); beep(1000, 0.1, 'triangle');
+    S.vials.splice(S.vials.indexOf(best), 1);
+    if (!playSample('coin', rand(0.97, 1.03))) beep(1000, 0.1, 'triangle');
     S.fx.push({ t: 0, x: best.x, y: best.y + 20, text: '+' + CONFIG.coinPickup + ' coins', col: '#ffd60a' });
   } else {
     best.state = 'fall';
