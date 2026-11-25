@@ -91,9 +91,11 @@ function ding() { // plays the instant a landing makes an order "covered" (layer
   } catch (e) {}
 }
 // ---------- Sound files ----------
-// Add an entry here per event: [url, gain]. Gain boosts quiet recordings. Missing/unloaded files fall back to synth.
+// Add an entry here per event: [url, gain, startOffsetSec]. Gain boosts quiet recordings; the offset skips leading
+// silence so the sound lands with the visual. Missing/unloaded files fall back to synth.
 const SAMPLES = {
-  rainbow: [['sounds/rainbow-1.mp3', 9.0], ['sounds/rainbow-2.mp3', 4.6], ['sounds/rainbow-3.mp3', 5.0]], // super vial lands in a vat
+  rainbow: [['sounds/rainbow-1.mp3', 9.0, 0], ['sounds/rainbow-2.mp3', 4.6, 0], ['sounds/rainbow-3.mp3', 5.0, 0]], // super vial lands in a vat
+  plop: [['sounds/plop-1.mp3', 4.8, 0.125], ['sounds/plop-2.mp3', 2.7, 0.13], ['sounds/plop-3.mp3', 1.8, 0.015]],    // regular vial lands in its vat
 };
 const sampleBuf = {}, lastPlayed = {};
 let samplesLoading = false;
@@ -103,15 +105,15 @@ function loadSamples() { // runs on the first tap (browsers only allow audio aft
   let ac; try { ac = getCtx(); } catch (e) { return; }
   for (const [name, list] of Object.entries(SAMPLES)) {
     sampleBuf[name] = [];
-    list.forEach(([url, gain]) => {
+    list.forEach(([url, gain, offset]) => {
       fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
         .then(ab => new Promise((res, rej) => ac.decodeAudioData(ab, res, rej)))
-        .then(buf => sampleBuf[name].push({ buf, gain })).catch(() => {});
+        .then(buf => sampleBuf[name].push({ buf, gain, offset: offset || 0 })).catch(() => {});
     });
   }
 }
 // Plays a random loaded variation (never the same twice in a row). Returns false if none is ready, so callers can fall back.
-function playSample(name) {
+function playSample(name, rate = 1) {
   if (!save.sound) return true;
   const list = sampleBuf[name];
   if (!list || !list.length) return false;
@@ -121,8 +123,8 @@ function playSample(name) {
   try {
     const ac = getCtx(); if (ac.state === 'suspended') ac.resume();
     const src = ac.createBufferSource(), g = ac.createGain();
-    src.buffer = list[i].buf; g.gain.value = list[i].gain;
-    src.connect(g); g.connect(ac.destination); src.start();
+    src.buffer = list[i].buf; src.playbackRate.value = rate; g.gain.value = list[i].gain;
+    src.connect(g); g.connect(ac.destination); src.start(0, list[i].offset);
     return true;
   } catch (e) { return false; }
 }
@@ -221,7 +223,9 @@ function land(v, i) {
     addOverflow(1, x, VAT_TOP - 30, 'wrong color!'); // wrong vat, vial is lost
   } else {
     const room = CONFIG.vatMax - S.vats[i];
-    S.vats[i] += Math.min(room, v.size); drop(v.size);
+    S.vats[i] += Math.min(room, v.size);
+    // bigger vials sound a little lower; a touch of random pitch keeps repeats from sounding identical
+    if (!playSample('plop', (1.12 - v.size * 0.04) * rand(0.97, 1.03))) drop(v.size);
     if (v.size > room) { S.shake[i] = 0.4; spill(x, VAT_TOP, COLORS[i].hex, 8 + 2 * (v.size - room)); addOverflow(1, x, VAT_TOP - 30, 'overflow!'); }
   }
   checkServe();

@@ -45,7 +45,8 @@ for visual variety). Numbers and patterns on the order bubble are the exact answ
 ## Sound files
 Recorded sounds live in `site/sounds/` and are listed in the `SAMPLES` table in `game.js` (url + gain per variation; a random
 variation plays each time). Anything missing or not yet loaded falls back to a synthesized sound.
-Currently: three splash variations for the rainbow ("super") vial landing.
+Currently: three splash variations for the rainbow ("super") vial landing, and three pebble-plop variations for a regular
+vial landing (pitched a little lower for bigger vials). The offset column skips each file's leading silence so sounds land with the visual.
 
 ## Power-ups (rare, random, never guaranteed; no cap on count)
 - **Mop**: tap, it does a quick animation and vanishes. -3 overflow.
